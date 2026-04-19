@@ -397,6 +397,11 @@ ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS rate_limit_per_minute INTEGER DEFA
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS published_at TIMESTAMP DEFAULT NULL;
 CREATE INDEX IF NOT EXISTS idx_videos_published_at ON videos(published_at) WHERE published_at IS NOT NULL;
 
+-- Geo-restriction. NULL = no restriction. Otherwise shape:
+--   { "mode": "allow" | "block", "countries": ["US", "GB", ...] }
+-- ISO 3166-1 alpha-2 country codes. Uppercase, 2 chars each.
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS geo_restriction JSONB DEFAULT NULL;
+
 -- ─────────────────────────────────────────
 -- AES-128 HLS ENCRYPTION KEYS
 -- ─────────────────────────────────────────

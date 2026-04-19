@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const db = require('../db/index.js');
 const { generateToken, generateKeyToken } = require('../services/signed-url');
+const { checkGeoAccess } = require('../services/geo');
 
 const router = express.Router();
 
@@ -78,6 +79,18 @@ router.get('/:video_id', async (req, res) => {
         error: 'This video is scheduled for a future release',
         available_at: video.published_at,
       });
+    }
+
+    // Geo-restriction: if configured, reject viewers from blocked / non-allowed countries.
+    if (video.geo_restriction) {
+      const viewerCountry = detectCountry(req);
+      const geo = checkGeoAccess(video.geo_restriction, viewerCountry);
+      if (!geo.allowed) {
+        return res.status(451).json({
+          error: 'This video is not available in your region',
+          reason: geo.reason,
+        });
+      }
     }
 
     // Fetch embed settings (video-specific, fall back to global defaults)

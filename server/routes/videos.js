@@ -335,7 +335,7 @@ router.post('/bulk-upload', (req, res, next) => {
 // PUT /:id - Update video
 router.put('/:id', async (req, res) => {
   try {
-    const { title, description, visibility, tags, folder_id, published_at } = req.body;
+    const { title, description, visibility, tags, folder_id, published_at, geo_restriction } = req.body;
 
     const existing = await db.query(
       'SELECT * FROM videos WHERE id = $1',
@@ -362,6 +362,17 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // geo_restriction: undefined = don't touch; anything else goes through the sanitizer
+    let geoValue; // undefined = not-sent-dont-touch
+    if (geo_restriction !== undefined) {
+      try {
+        const { sanitizeGeoRestriction } = require('../services/geo');
+        geoValue = sanitizeGeoRestriction(geo_restriction);
+      } catch (geoErr) {
+        return res.status(400).json({ error: geoErr.message });
+      }
+    }
+
     const result = await db.query(
       `UPDATE videos
        SET title = COALESCE($1, title),
@@ -370,6 +381,7 @@ router.put('/:id', async (req, res) => {
            tags = COALESCE($4, tags),
            folder_id = $5,
            published_at = CASE WHEN $7::boolean THEN $8::timestamp ELSE published_at END,
+           geo_restriction = CASE WHEN $9::boolean THEN $10::jsonb ELSE geo_restriction END,
            updated_at = NOW()
        WHERE id = $6
        RETURNING *`,
@@ -382,6 +394,8 @@ router.put('/:id', async (req, res) => {
         req.params.id,
         publishedAtValue !== undefined,
         publishedAtValue,
+        geoValue !== undefined,
+        geoValue === null || geoValue === undefined ? null : JSON.stringify(geoValue),
       ]
     );
 
