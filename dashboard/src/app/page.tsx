@@ -246,8 +246,11 @@ export default function DashboardHome() {
         </div>
       ) : (
         <>
-          {/* ── KPI Cards — independent cards w/ colored left accent stripes ── */}
-          <div className="grid grid-cols-2 gap-[14px] mb-5 md:grid-cols-3 xl:grid-cols-5">
+          {/* ── KPI Cards — independent cards w/ colored left accent stripes.
+               Mobile grid: 2 cols at narrow widths (Storage + Bandwidth side-by-side,
+               Cloudflare R2 then spans BOTH columns so its "NOT CONFIGURED" badge
+               doesn't get squished like it did in the earlier cramped layout). ── */}
+          <div className="grid grid-cols-2 gap-[12px] sm:gap-[14px] mb-5 xl:grid-cols-5">
             {/* Total Videos */}
             <div className="card-base fade-up delay-1">
               <div className="card-accent" style={{ background: "#5b5a8b" }} />
@@ -323,19 +326,30 @@ export default function DashboardHome() {
               </div>
             </div>
 
-            {/* Cloudflare R2 */}
-            <div className="card-base fade-up delay-5">
+            {/* Cloudflare R2 — uses the legacy HTML's custom stacked-disks SVG
+                (not material cloud icon) for instantly recognisable R2 branding.
+                On mobile (≤xl) it spans both columns so the "NOT CONFIGURED" badge
+                doesn't get cramped into a half-width card. */}
+            <div className="card-base fade-up delay-5 col-span-2 xl:col-span-1">
               <div className="card-accent" style={{ background: "#f38020" }} />
               <div className="mb-[14px] flex items-center justify-between">
                 <span className="section-label">Cloudflare R2</span>
                 <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#fff4ec" }}>
-                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#f38020" }}>cloud</span>
+                  <svg width="18" height="18" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Cloudflare R2">
+                    <ellipse cx="32" cy="12" rx="22" ry="8" fill="#F6821F"/>
+                    <path d="M10 12v14c0 4.4 9.8 8 22 8s22-3.6 22-8V12c0 4.4-9.8 8-22 8s-22-3.6-22-8z" fill="#F6821F"/>
+                    <path d="M10 26v14c0 4.4 9.8 8 22 8s22-3.6 22-8V26c0 4.4-9.8 8-22 8s-22-3.6-22-8z" fill="#F6821F"/>
+                    <path d="M10 40v12c0 4.4 9.8 8 22 8s22-3.6 22-8V40c0 4.4-9.8 8-22 8s-22-3.6-22-8z" fill="#F6821F"/>
+                    <circle cx="38" cy="14" r="2" fill="white" opacity="0.7"/>
+                    <circle cx="38" cy="28" r="2" fill="white" opacity="0.7"/>
+                    <circle cx="38" cy="42" r="2" fill="white" opacity="0.7"/>
+                  </svg>
                 </div>
               </div>
               <div className="stat-num">
                 {r2Fmt.value}<span className="ml-0.5 text-[16px] font-medium text-on-surface-var">{r2Fmt.unit}</span>
               </div>
-              <div className="mt-[10px] flex items-center justify-between gap-2">
+              <div className="mt-[10px] flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[11px] text-on-surface-var">{storage?.usage.r2.count ?? 0} video{(storage?.usage.r2.count ?? 0) !== 1 ? "s" : ""} &middot; R2</span>
                 {!storage?.r2_configured && (
                   <span className="badge-pill badge-neutral">Not configured</span>
@@ -344,62 +358,14 @@ export default function DashboardHome() {
             </div>
           </div>
 
-          {/* ── Engagement KPI Cards — same card pattern, 6 cards ── */}
-          <div className="grid grid-cols-2 gap-[14px] mb-5 md:grid-cols-3 xl:grid-cols-6">
-            {/* Avg Watch Time */}
-            <div className="card-base fade-up delay-1">
-              <div className="card-accent" style={{ background: "#7c4dff" }} />
-              <div className="mb-[14px] flex items-center justify-between">
-                <span className="section-label">Avg Watch Time</span>
-                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#f3eafd" }}>
-                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#7c4dff" }}>schedule</span>
-                </div>
-              </div>
-              <div className="stat-num">{stats?.avgWatchTime ?? "0s"}</div>
-              <div className="mt-[10px] flex items-center justify-between">
-                <span className="text-[11px] text-on-surface-var">Per view</span>
-                <DeltaBadge pct={stats?.avgWatchDeltaPct ?? null} />
-              </div>
-            </div>
-
-            {/* Completion Rate */}
-            <div className="card-base fade-up delay-2">
-              <div className="card-accent" style={{ background: "#2e7d32" }} />
-              <div className="mb-[14px] flex items-center justify-between">
-                <span className="section-label">Completion Rate</span>
-                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#e8f5e9" }}>
-                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#2e7d32" }}>check_circle</span>
-                </div>
-              </div>
-              <div className="stat-num">
-                {stats?.completionRate !== null && stats?.completionRate !== undefined
-                  ? <>{stats.completionRate}<span className="ml-0.5 text-[16px] font-medium text-on-surface-var">%</span></>
-                  : <span className="text-[22px] font-semibold text-on-surface-var">{"\u2014"}</span>}
-              </div>
-              <div className="mt-[10px] flex items-center justify-between">
-                <span className="text-[11px] text-on-surface-var">{"Watched \u2265 90%"}</span>
-                <DeltaBadge pct={stats?.completionDeltaPct ?? null} />
-              </div>
-            </div>
-
-            {/* Unique Viewers */}
-            <div className="card-base fade-up delay-3">
-              <div className="card-accent" style={{ background: "#2196f3" }} />
-              <div className="mb-[14px] flex items-center justify-between">
-                <span className="section-label">Unique Viewers</span>
-                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#e3f2fd" }}>
-                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#2196f3" }}>group</span>
-                </div>
-              </div>
-              <div className="stat-num">{formatViewsShort(stats?.uniqueViewers ?? 0)}</div>
-              <div className="mt-[10px] flex items-center justify-between">
-                <span className="text-[11px] text-on-surface-var">Distinct visitors</span>
-                <DeltaBadge pct={stats?.uniqueViewersDeltaPct ?? null} />
-              </div>
-            </div>
-
+          {/* ── Engagement KPIs — only the 2 live-operations ones:
+               Active Embeds + Processing Queue. Earlier Avg Watch Time,
+               Completion Rate, Unique Viewers, Top Device cards were
+               removed per user request — they live in the Analytics page
+               and don't need dashboard real-estate. ── */}
+          <div className="grid grid-cols-1 gap-[14px] mb-5 sm:grid-cols-2">
             {/* Active Embeds */}
-            <div className="card-base fade-up delay-4">
+            <div className="card-base fade-up delay-1">
               <div className="card-accent" style={{ background: "#f57c00" }} />
               <div className="mb-[14px] flex items-center justify-between">
                 <span className="section-label">Active Embeds</span>
@@ -414,33 +380,6 @@ export default function DashboardHome() {
               </div>
             </div>
 
-            {/* Top Device */}
-            {(() => {
-              const d = stats?.devices ?? { desktop: 0, mobile: 0, tablet: 0 };
-              const entries = Object.entries(d) as [string, number][];
-              const [topKey, topPct] = entries.reduce((m, e) => e[1] > m[1] ? e : m, ["desktop", 0]);
-              const icon = topKey === "mobile" ? "smartphone" : topKey === "tablet" ? "tablet" : "desktop_windows";
-              const label = topKey.charAt(0).toUpperCase() + topKey.slice(1);
-              const hasData = entries.some(([, v]) => v > 0);
-              return (
-                <div className="card-base fade-up delay-5">
-                  <div className="card-accent" style={{ background: "#455a64" }} />
-                  <div className="mb-[14px] flex items-center justify-between">
-                    <span className="section-label">Top Device</span>
-                    <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#eceff1" }}>
-                      <span className="material-symbols-outlined text-[15px]" style={{ color: "#455a64" }}>{icon}</span>
-                    </div>
-                  </div>
-                  <div className="stat-num" style={{ fontSize: hasData ? 30 : undefined }}>
-                    {hasData ? label : <span className="text-[22px] font-semibold text-on-surface-var">{"\u2014"}</span>}
-                  </div>
-                  <div className="mt-[10px] flex items-center justify-between">
-                    <span className="text-[11px] text-on-surface-var">{hasData ? `${topPct}% of views` : "No device data"}</span>
-                  </div>
-                </div>
-              );
-            })()}
-
             {/* Processing Queue */}
             {(() => {
               const pending = queue?.pending ?? 0;
@@ -450,7 +389,7 @@ export default function DashboardHome() {
               const iconBg = failed > 0 ? "#fce4ec" : pending > 0 ? "#fff4e5" : "#e8f5e9";
               const iconName = failed > 0 ? "error" : pending > 0 ? "sync" : "check_circle";
               return (
-                <div className="card-base fade-up delay-6">
+                <div className="card-base fade-up delay-2">
                   <div className="card-accent" style={{ background: accent }} />
                   <div className="mb-[14px] flex items-center justify-between">
                     <span className="section-label">Processing Queue</span>
