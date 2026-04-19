@@ -15,6 +15,7 @@ const systemNavItems = [
   { label: "SSL", href: "/ssl", icon: "verified_user" },
   { label: "API Keys", href: "/api-keys", icon: "vpn_key" },
   { label: "Webhooks", href: "/webhooks", icon: "webhook" },
+  { label: "Audit Log", href: "/audit", icon: "manage_history" },
   { label: "Settings", href: "/settings", icon: "settings" },
 ];
 

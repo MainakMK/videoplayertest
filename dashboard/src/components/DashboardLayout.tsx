@@ -14,6 +14,7 @@ const pageTitles: Record<string, string> = {
   "/ssl": "SSL Certificates",
   "/api-keys": "API Keys",
   "/webhooks": "Webhooks",
+  "/audit": "Audit Log",
 };
 
 export default function DashboardLayout({
