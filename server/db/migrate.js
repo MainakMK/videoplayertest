@@ -391,6 +391,12 @@ ALTER TABLE videos ADD COLUMN IF NOT EXISTS sprite_vtt_url TEXT;
 -- Per-API-key rate limit override (requests/minute). NULL = fall back to global rate_limit_api.
 ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS rate_limit_per_minute INTEGER DEFAULT NULL;
 
+-- Scheduled publishing. When set to a future timestamp, the video is treated as
+-- private (player rejects viewers) until the time is reached. NULL = publish immediately
+-- on upload (existing behavior).
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS published_at TIMESTAMP DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS idx_videos_published_at ON videos(published_at) WHERE published_at IS NOT NULL;
+
 -- ─────────────────────────────────────────
 -- AES-128 HLS ENCRYPTION KEYS
 -- ─────────────────────────────────────────

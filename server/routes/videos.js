@@ -89,9 +89,15 @@ router.get('/', async (req, res) => {
     }
 
     if (status) {
-      conditions.push(`status = $${paramIndex}`);
-      params.push(status);
-      paramIndex++;
+      // "scheduled" is a virtual status: videos with a future published_at.
+      // Matches videos regardless of their raw status (ready/processing/error).
+      if (status === 'scheduled') {
+        conditions.push(`published_at IS NOT NULL AND published_at > NOW()`);
+      } else {
+        conditions.push(`status = $${paramIndex}`);
+        params.push(status);
+        paramIndex++;
+      }
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -329,7 +335,7 @@ router.post('/bulk-upload', (req, res, next) => {
 // PUT /:id - Update video
 router.put('/:id', async (req, res) => {
   try {
-    const { title, description, visibility, tags, folder_id } = req.body;
+    const { title, description, visibility, tags, folder_id, published_at } = req.body;
 
     const existing = await db.query(
       'SELECT * FROM videos WHERE id = $1',
@@ -340,6 +346,22 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Video not found' });
     }
 
+    // Normalize published_at: null/"" clears the schedule; any other value
+    // must parse to a valid Date (and must be in the future or already passed).
+    // `undefined` means the caller didn't send the field — keep existing value.
+    let publishedAtValue; // undefined = not-sent-dont-touch
+    if (published_at !== undefined) {
+      if (published_at === null || published_at === '') {
+        publishedAtValue = null;
+      } else {
+        const parsed = new Date(published_at);
+        if (isNaN(parsed.getTime())) {
+          return res.status(400).json({ error: 'Invalid published_at timestamp' });
+        }
+        publishedAtValue = parsed;
+      }
+    }
+
     const result = await db.query(
       `UPDATE videos
        SET title = COALESCE($1, title),
@@ -347,10 +369,20 @@ router.put('/:id', async (req, res) => {
            visibility = COALESCE($3, visibility),
            tags = COALESCE($4, tags),
            folder_id = $5,
+           published_at = CASE WHEN $7::boolean THEN $8::timestamp ELSE published_at END,
            updated_at = NOW()
        WHERE id = $6
        RETURNING *`,
-      [title, description, visibility, tags ? JSON.stringify(tags) : null, folder_id, req.params.id]
+      [
+        title,
+        description,
+        visibility,
+        tags ? JSON.stringify(tags) : null,
+        folder_id,
+        req.params.id,
+        publishedAtValue !== undefined,
+        publishedAtValue,
+      ]
     );
 
     res.json(result.rows[0]);

@@ -71,6 +71,15 @@ router.get('/:video_id', async (req, res) => {
       return res.status(403).json({ error: 'This video is private' });
     }
 
+    // Scheduled publishing: if published_at is set and still in the future,
+    // treat the video as not-yet-available regardless of visibility.
+    if (video.published_at && new Date(video.published_at) > new Date()) {
+      return res.status(403).json({
+        error: 'This video is scheduled for a future release',
+        available_at: video.published_at,
+      });
+    }
+
     // Fetch embed settings (video-specific, fall back to global defaults)
     const embedResult = await db.query(
       `SELECT * FROM embed_settings WHERE video_id = $1
