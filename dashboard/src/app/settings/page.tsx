@@ -216,6 +216,14 @@ interface EncodingConfig {
   extra_ffmpeg_params: string;
 }
 
+interface BitrateRange { min: number; max: number; default: number }
+interface RatioRange { min: number; max: number; default: number }
+interface TierPreset {
+  bitrate_2160p: number; bitrate_1440p: number; bitrate_1080p: number;
+  bitrate_720p: number;  bitrate_480p: number;  bitrate_360p: number;  bitrate_240p: number;
+  audio_bitrate: number;
+}
+
 interface EncodingValidValues {
   tiers: string[];
   audio: number[];
@@ -229,6 +237,15 @@ interface EncodingValidValues {
   audioModes: string[];
   ac3Bitrates: number[];
   allQualities: string[];
+  maxrateRatioRange?: RatioRange;
+  bufsizeRatioRange?: RatioRange;
+}
+
+interface EncodingConfigResponse {
+  config: EncodingConfig;
+  validValues: EncodingValidValues;
+  ranges?: Record<string, BitrateRange>;          // keyed by "2160p" / "1440p" / ...
+  tierPresets?: Record<string, TierPreset>;       // keyed by "premium" / "balanced" / "optimized"
 }
 
 interface WorkerStatus {
@@ -328,6 +345,9 @@ export default function SettingsPage() {
   // Encoding
   const [encodingConfig, setEncodingConfig] = useState<EncodingConfig | null>(null);
   const [encodingValid, setEncodingValid] = useState<EncodingValidValues | null>(null);
+  const [encodingRanges, setEncodingRanges] = useState<Record<string, BitrateRange> | null>(null);
+  const [encodingTierPresets, setEncodingTierPresets] = useState<Record<string, TierPreset> | null>(null);
+  const [encodingDirty, setEncodingDirty] = useState(false);
   const [encodingSaving, setEncodingSaving] = useState(false);
   const [workerStatus, setWorkerStatus] = useState<WorkerStatus | null>(null);
   const [workerRestarting, setWorkerRestarting] = useState(false);
@@ -427,9 +447,12 @@ export default function SettingsPage() {
 
         // Encoding
         try {
-          const enc = await api.get<{ config: EncodingConfig; validValues: EncodingValidValues }>("/settings/encoding");
+          const enc = await api.get<EncodingConfigResponse>("/settings/encoding");
           setEncodingConfig(enc.config);
           setEncodingValid(enc.validValues);
+          if (enc.ranges) setEncodingRanges(enc.ranges);
+          if (enc.tierPresets) setEncodingTierPresets(enc.tierPresets);
+          setEncodingDirty(false);
         } catch {
           // Encoding config not yet available
         }
@@ -485,6 +508,7 @@ export default function SettingsPage() {
     try {
       await api.put("/settings/encoding", encodingConfig);
       toast("Encoding settings saved", "success");
+      setEncodingDirty(false);
     } catch (e: unknown) {
       const err = e as { message?: string };
       toast(err.message ?? "Failed to save encoding settings", "error");
@@ -522,7 +546,44 @@ export default function SettingsPage() {
 
   const updateEncoding = <K extends keyof EncodingConfig>(key: K, value: EncodingConfig[K]) => {
     setEncodingConfig((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setEncodingDirty(true);
   };
+
+  // Merge multiple encoding field updates in one state change (used by tier presets
+  // which bulk-set 8 bitrate fields at once).
+  const updateEncodingBulk = (patch: Partial<EncodingConfig>) => {
+    setEncodingConfig((prev) => (prev ? { ...prev, ...patch } : prev));
+    setEncodingDirty(true);
+  };
+
+  const resetEncodingDefaults = async () => {
+    try {
+      // Load balanced-tier defaults + reset secondary settings to the server's DEFAULTS.
+      // This matches what "Reset to defaults" did in the old dashboard.
+      const preset = encodingTierPresets?.balanced;
+      if (!preset) return;
+      const patch: Partial<EncodingConfig> = {
+        preset_tier: "balanced",
+        ...preset,
+        rate_control: "constrained_vbr",
+        maxrate_ratio: 1.5,
+        bufsize_ratio: 2.0,
+        ffmpeg_preset: "veryfast",
+        keyframe_seconds: 2,
+        video_codec: "h264",
+        audio_mode: "stereo",
+        ac3_bitrate: 384,
+        clone_top_quality: true,
+        encrypt_new_videos: false,
+        extra_ffmpeg_params: "",
+      };
+      updateEncodingBulk(patch);
+      toast("Reset to defaults — remember to Save.", "success");
+    } catch {
+      toast("Failed to reset defaults", "error");
+    }
+  };
+
 
   const testStorageConnection = async () => {
     setStorageTesting(true);
@@ -1173,11 +1234,22 @@ export default function SettingsPage() {
 
     const labelClass = "mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]";
     const selectClass = "w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-[13px] text-[#1e1e2f] focus:ring-2 focus:ring-primary/15 focus:border-primary/30 focus:outline-none transition";
-    const numberClass = selectClass;
 
-    const qualityKeys: (keyof EncodingConfig)[] = [
-      "bitrate_2160p", "bitrate_1440p", "bitrate_1080p", "bitrate_720p", "bitrate_480p", "bitrate_360p", "bitrate_240p",
+    type QK = "bitrate_2160p" | "bitrate_1440p" | "bitrate_1080p" | "bitrate_720p" | "bitrate_480p" | "bitrate_360p" | "bitrate_240p";
+    const qualityRows: { key: QK; label: string; tag: string; rangeKey: string; note: string }[] = [
+      { key: "bitrate_2160p", label: "2160p Video", tag: "4K UHD",             rangeKey: "2160p", note: "only encoded if source is 4K" },
+      { key: "bitrate_1440p", label: "1440p Video", tag: "2K QHD",             rangeKey: "1440p", note: "only encoded if source is 1440p+" },
+      { key: "bitrate_1080p", label: "1080p Video", tag: "Full HD",            rangeKey: "1080p", note: "" },
+      { key: "bitrate_720p",  label: "720p Video",  tag: "",                   rangeKey: "720p",  note: "" },
+      { key: "bitrate_480p",  label: "480p Video",  tag: "",                   rangeKey: "480p",  note: "" },
+      { key: "bitrate_360p",  label: "360p Video",  tag: "Low SD",             rangeKey: "360p",  note: "" },
+      { key: "bitrate_240p",  label: "240p Video",  tag: "Mobile / weak network", rangeKey: "240p", note: "perfect for 3G fallback" },
     ];
+
+    // Rough "typical H.264 VBR output" estimate for a 10-min video. Coefficient
+    // 0.045 was picked to match the old dashboard's per-slider size hints
+    // (2160p @ 14000k -> ~621 MB, 1080p @ 3500k -> ~159 MB).
+    const estimateMb = (kbps: number) => Math.round((kbps || 0) * 0.045);
 
     const toggleDefaultQuality = (q: string) => {
       const current = new Set(cfg.default_qualities || []);
@@ -1185,6 +1257,49 @@ export default function SettingsPage() {
       updateEncoding("default_qualities", Array.from(current));
     };
 
+    // Switching to a tier auto-fills all 8 bitrates. "custom" is a marker — leave
+    // the existing values alone so the admin keeps their hand-tuned bitrates.
+    const applyTier = (tier: string) => {
+      if (tier === cfg.preset_tier) return;
+      const preset = encodingTierPresets?.[tier];
+      if (tier === "custom" || !preset) {
+        updateEncoding("preset_tier", tier);
+        return;
+      }
+      updateEncodingBulk({ preset_tier: tier, ...preset });
+    };
+
+    const tierMeta: Record<string, { icon: string; title: string; desc: string; est: string; tag: string; tagColor: string; bg: string }> = {
+      premium:   { icon: "star",         title: "Premium",   desc: "Highest quality, best for premium content", est: "~825 MB / 10-min video", tag: "+50% file size", tagColor: "#b45309", bg: "#fef3c7" },
+      balanced:  { icon: "check_circle", title: "Balanced",  desc: "Recommended for most platforms",            est: "~551 MB / 10-min video", tag: "Default",        tagColor: "#5b5a8b", bg: "#eceafd" },
+      optimized: { icon: "inventory_2",  title: "Optimized", desc: "Smaller files, save on storage costs",      est: "~395 MB / 10-min video", tag: "-28% file size", tagColor: "#047857", bg: "#d1fae5" },
+      custom:    { icon: "tune",         title: "Custom",    desc: "Set every bitrate manually below",          est: "Manual",                 tag: "Full control",   tagColor: "#475569", bg: "#e2e8f0" },
+    };
+
+    // Estimated Impact: sum per-quality sizes for the qualities the admin plans
+    // to encode (default_qualities). Audio layer adds a small constant per variant.
+    const activeQualities = (cfg.default_qualities || []);
+    const impactRows = qualityRows
+      .filter(r => {
+        const qName = r.key.replace("bitrate_", "");
+        return activeQualities.includes(qName);
+      })
+      .map(r => {
+        const mb = estimateMb(cfg[r.key] as number);
+        const qName = r.key.replace("bitrate_", "");
+        return { q: qName, mb };
+      });
+    const totalMb = impactRows.reduce((a, r) => a + r.mb, 0);
+    const r2CostPer100 = (totalMb / 1024) * 0.015 * 100; // $0.015/GB-mo, 100 videos
+
+    // Maxrate/bufsize ranges — fall back to compile-time constants if server doesn't return them
+    const maxR = vv.maxrateRatioRange || { min: 1.0, max: 3.0, default: 1.5 };
+    const bufR = vv.bufsizeRatioRange || { min: 1.0, max: 4.0, default: 2.0 };
+
+    // 1080p @ 3500k is the "typical" live-preview anchor shown in the old design.
+    const sampleBitrate1080 = cfg.bitrate_1080p;
+
+    // Worker status color + label
     const statusColor = workerStatus?.restartPending ? "#ef6c00" : workerStatus?.activeJobs ? "#2196f3" : "#2e7d32";
     const statusLabel = workerStatus?.restartPending
       ? "Restart pending"
@@ -1194,89 +1309,102 @@ export default function SettingsPage() {
 
     return (
       <>
-        {/* Worker Status */}
-        <div className={`${sectionCard} mb-8`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-[15px] font-bold text-on-surface">Encoding Worker</h3>
-              <p className="mt-1 text-[12px] text-on-surface-var">
-                Status:{" "}
-                <span className="font-bold" style={{ color: statusColor }}>{statusLabel}</span>
-                {" \u00b7 "}
-                {workerStatus ? `${workerStatus.activeJobs} active \u00b7 ${workerStatus.waitingJobs} waiting \u00b7 ${workerStatus.delayedJobs} delayed` : "status unavailable"}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={refreshWorkerStatus} className={btnSecondary}>Refresh</button>
-              <button onClick={() => restartWorker(false)} disabled={workerRestarting} className={btnPrimary}>
-                {workerRestarting ? "Restarting..." : "Restart Worker"}
-              </button>
-            </div>
+        {/* ── Quality Preset ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-var">tune</span>
+            <h3 className="text-[15px] font-bold text-on-surface">Quality Preset</h3>
           </div>
-          {workerStatus?.activeJobs ? (
-            <div className="mt-4 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[12px] text-[#92400e]">
-              {workerStatus.activeJobs} job(s) active. Click Restart to drain gracefully, or{" "}
-              <button onClick={() => restartWorker(true)} className="font-bold underline">force restart</button>{" "}
-              to cancel them.
-            </div>
-          ) : null}
-        </div>
-
-        {/* Preset Tier */}
-        <div className={`${sectionCard} mb-8`}>
-          <h3 className="mb-5 text-[15px] font-bold text-on-surface">Preset Tier</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {vv.tiers.map((tier) => (
-              <button
-                key={tier}
-                onClick={() => updateEncoding("preset_tier", tier)}
-                className={`rounded-[12px] border px-4 py-4 text-left transition-all ${
-                  cfg.preset_tier === tier
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-[#e5e7eb] bg-white hover:border-primary/40"
-                }`}
-              >
-                <div className="text-[13px] font-bold capitalize text-on-surface">{tier}</div>
-                <div className="mt-1 text-[11px] text-on-surface-var">
-                  {tier === "optimized" ? "Smaller files, lower bitrate" : tier === "balanced" ? "Recommended default" : tier === "premium" ? "Higher quality, larger files" : "Custom per-quality bitrates"}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Per-Quality Bitrates */}
-        <div className={`${sectionCard} mb-8`}>
-          <h3 className="mb-1 text-[15px] font-bold text-on-surface">Bitrates (kbps)</h3>
-          <p className="mb-5 text-[12px] text-on-surface-var">Target video bitrate for each output quality.</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            {qualityKeys.map((k) => {
-              const label = String(k).replace("bitrate_", "").toUpperCase();
+          <p className="mb-5 text-[12px] text-on-surface-var">Pick a starting point — the bitrates below will fill in automatically</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {(["premium", "balanced", "optimized", "custom"] as const).map((tier) => {
+              const meta = tierMeta[tier];
+              const active = cfg.preset_tier === tier;
               return (
-                <label key={k} className="block">
-                  <span className={labelClass}>{label}</span>
-                  <input
-                    type="number"
-                    value={cfg[k] as number}
-                    onChange={(e) => updateEncoding(k, Number(e.target.value) as never)}
-                    className={numberClass}
-                  />
-                </label>
+                <button
+                  key={tier}
+                  onClick={() => applyTier(tier)}
+                  className={`rounded-[12px] border-2 px-4 py-4 text-left transition-all ${
+                    active
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-[#e5e7eb] bg-white hover:border-primary/40"
+                  }`}
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]" style={{ color: active ? "#5b5a8b" : "#6b7280" }}>{meta.icon}</span>
+                    <span className="text-[14px] font-bold text-on-surface">{meta.title}</span>
+                  </div>
+                  <p className="mb-3 text-[11.5px] text-on-surface-var leading-snug">{meta.desc}</p>
+                  <div className="text-[12.5px] font-bold text-on-surface">{meta.est}</div>
+                  <div className="mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: meta.bg, color: meta.tagColor }}>
+                    {meta.tag}
+                  </div>
+                </button>
               );
             })}
-            <label className="block">
-              <span className={labelClass}>Audio bitrate</span>
-              <select value={cfg.audio_bitrate} onChange={(e) => updateEncoding("audio_bitrate", Number(e.target.value))} className={selectClass}>
-                {vv.audio.map((b) => <option key={b} value={b}>{b} kbps</option>)}
-              </select>
-            </label>
           </div>
         </div>
 
-        {/* Default Qualities */}
-        <div className={`${sectionCard} mb-8`}>
-          <h3 className="mb-1 text-[15px] font-bold text-on-surface">Default Output Qualities</h3>
-          <p className="mb-5 text-[12px] text-on-surface-var">Which quality renditions to produce for new videos.</p>
+        {/* ── Video Bitrates (sliders) ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-var">video_settings</span>
+            <h3 className="text-[15px] font-bold text-on-surface">Video Bitrates</h3>
+          </div>
+          <p className="mb-5 text-[12px] text-on-surface-var">Higher = better quality + larger files. Lower = smaller files + slight quality loss in dark/complex scenes.</p>
+          <div className="flex flex-col gap-5">
+            {qualityRows.map((r) => {
+              const range = (encodingRanges && encodingRanges[r.rangeKey]) || { min: 100, max: 24000, default: 1000 };
+              const value = cfg[r.key] as number;
+              const mb = estimateMb(value);
+              return (
+                <div key={r.key}>
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[13px] font-bold text-on-surface">{r.label}</span>
+                      {r.tag && <span className="text-[11px] text-on-surface-var">({r.tag})</span>}
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[14px] font-bold text-primary">{value}</span>
+                      <span className="text-[11px] font-semibold text-on-surface-var">kbps</span>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={range.min}
+                    max={range.max}
+                    step={range.min >= 1000 ? 100 : 10}
+                    value={value}
+                    onChange={(e) => updateEncoding(r.key, Number(e.target.value) as never)}
+                    className="w-full h-[4px] accent-primary cursor-pointer"
+                  />
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
+                    <span>{range.min}k</span>
+                    <span>{range.max}k</span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-on-surface-var">
+                    <span className="mr-1">↳</span>
+                    ~{mb} MB per 10-min video{r.note ? ` · ${r.note}` : ""}
+                  </div>
+                </div>
+              );
+            })}
+            {/* Audio bitrate row — dropdown, kept next to the video bitrates since it's the same family of knobs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-[#e5e7eb]">
+              <label className="block">
+                <span className={labelClass}>Audio bitrate</span>
+                <select value={cfg.audio_bitrate} onChange={(e) => updateEncoding("audio_bitrate", Number(e.target.value))} className={selectClass}>
+                  {vv.audio.map((b) => <option key={b} value={b}>{b} kbps</option>)}
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Default Output Qualities (pill chips) ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <h3 className="mb-1 text-[15px] font-bold text-on-surface">Default Output Qualities to Encode</h3>
+          <p className="mb-4 text-[12px] text-on-surface-var">Which quality renditions to produce for new videos. Source resolution caps this list — no upscaling.</p>
           <div className="flex flex-wrap gap-2">
             {vv.allQualities.map((q) => {
               const active = (cfg.default_qualities || []).includes(q);
@@ -1295,118 +1423,321 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Encoder Settings */}
-        <div className={`${sectionCard} mb-8`}>
-          <h3 className="mb-5 text-[15px] font-bold text-on-surface">Encoder</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <label className="block">
-              <span className={labelClass}>Video codec</span>
-              <select value={cfg.video_codec} onChange={(e) => updateEncoding("video_codec", e.target.value)} className={selectClass}>
-                {vv.videoCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>FFmpeg preset</span>
-              <select value={cfg.ffmpeg_preset} onChange={(e) => updateEncoding("ffmpeg_preset", e.target.value)} className={selectClass}>
-                {vv.ffmpegPresets.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Rate control</span>
-              <select value={cfg.rate_control} onChange={(e) => updateEncoding("rate_control", e.target.value)} className={selectClass}>
-                {vv.rateControls.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Keyframe interval (sec)</span>
-              <select value={cfg.keyframe_seconds} onChange={(e) => updateEncoding("keyframe_seconds", Number(e.target.value))} className={selectClass}>
-                {vv.keyframeSeconds.map((k) => <option key={k} value={k}>{k}s</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Segment extension</span>
-              <select value={cfg.segment_extension} onChange={(e) => updateEncoding("segment_extension", e.target.value)} className={selectClass}>
-                {vv.segmentExtensions.map((s) => <option key={s} value={s}>.{s}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Audio mode</span>
-              <select value={cfg.audio_mode} onChange={(e) => updateEncoding("audio_mode", e.target.value)} className={selectClass}>
-                {vv.audioModes.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>AC3 bitrate</span>
-              <select value={cfg.ac3_bitrate} onChange={(e) => updateEncoding("ac3_bitrate", Number(e.target.value))} className={selectClass}>
-                {vv.ac3Bitrates.map((b) => <option key={b} value={b}>{b} kbps</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Maxrate ratio</span>
-              <input type="number" step="0.1" value={cfg.maxrate_ratio} onChange={(e) => updateEncoding("maxrate_ratio", Number(e.target.value))} className={numberClass} />
-            </label>
-            <label className="block">
-              <span className={labelClass}>Bufsize ratio</span>
-              <input type="number" step="0.1" value={cfg.bufsize_ratio} onChange={(e) => updateEncoding("bufsize_ratio", Number(e.target.value))} className={numberClass} />
-            </label>
+        {/* ── Audio Mode (pill toggle + AC3 bitrate) ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-var">graphic_eq</span>
+            <h3 className="text-[15px] font-bold text-on-surface">Audio Mode</h3>
           </div>
+          <p className="mb-4 text-[12px] text-on-surface-var">Surround produces BOTH a 5.1 AC3 track and a stereo AAC fallback. The player auto-selects based on device capability. Only works when the source has 5.1+ audio — stereo sources skip the surround track automatically.</p>
+          <div className="grid grid-cols-2 gap-3">
+            {(["stereo", "surround"] as const).map((mode) => {
+              const active = cfg.audio_mode === mode;
+              const label = mode === "stereo" ? "Stereo AAC" : "5.1 Surround AC3 + AAC";
+              return (
+                <button
+                  key={mode}
+                  onClick={() => updateEncoding("audio_mode", mode)}
+                  className={`rounded-[10px] border-2 px-5 py-3 text-[13px] font-bold transition-all ${
+                    active ? "border-primary bg-primary/10 text-on-surface" : "border-[#e5e7eb] bg-white text-on-surface-var hover:border-primary/40"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {cfg.audio_mode === "surround" && (
+            <div className="mt-5 pt-5 border-t border-[#e5e7eb]">
+              <span className={labelClass}>AC3 Bitrate</span>
+              <div className="flex flex-wrap gap-2">
+                {vv.ac3Bitrates.map((b) => {
+                  const active = cfg.ac3_bitrate === b;
+                  const hint = b === 256 ? "economy" : b === 384 ? "standard" : b === 448 ? "broadcast" : b === 640 ? "reference" : "";
+                  return (
+                    <button
+                      key={b}
+                      onClick={() => updateEncoding("ac3_bitrate", b)}
+                      className={`rounded-full border px-4 py-2 text-[12px] font-semibold transition ${
+                        active ? "border-primary bg-primary text-white" : "border-[#e5e7eb] bg-white text-on-surface-var hover:border-primary/40"
+                      }`}
+                    >
+                      {b}k{hint ? ` ${hint}` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Concurrency */}
-        <div className={`${sectionCard} mb-8`}>
-          <h3 className="mb-5 text-[15px] font-bold text-on-surface">Concurrency</h3>
+        {/* ── Worker Performance ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-var">speed</span>
+            <h3 className="text-[15px] font-bold text-on-surface">Worker Performance</h3>
+          </div>
+          <p className="mb-4 text-[12px] text-on-surface-var">Controls how the FFmpeg worker uses your CPU. Pick higher values on bigger servers.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <label className="block">
-              <span className={labelClass}>Video concurrency</span>
-              <select value={cfg.video_concurrency} onChange={(e) => updateEncoding("video_concurrency", Number(e.target.value))} className={selectClass}>
-                {vv.videoConcurrency.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Quality concurrency</span>
+              <span className={labelClass}>Quality Variants in Parallel</span>
               <select value={cfg.quality_concurrency} onChange={(e) => updateEncoding("quality_concurrency", Number(e.target.value))} className={selectClass}>
-                {vv.qualityConcurrency.map((n) => <option key={n} value={n}>{n}</option>)}
+                {vv.qualityConcurrency.map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 2 ? "— balanced (recommended for 2-4 vCPU)" : ""}
+                  </option>
+                ))}
               </select>
+              <span className="mt-1.5 block text-[11px] text-on-surface-var">How many quality levels (1080p, 720p…) FFmpeg encodes at the same time per video.</span>
             </label>
-          </div>
-        </div>
-
-        {/* Advanced toggles */}
-        <div className={`${sectionCard} mb-8`}>
-          <h3 className="mb-5 text-[15px] font-bold text-on-surface">Advanced</h3>
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[13px] font-semibold text-on-surface">Clone top quality</div>
-                <div className="text-[12px] text-on-surface-var">If source is below top target, copy it as-is instead of upscaling.</div>
-              </div>
-              <Toggle enabled={cfg.clone_top_quality} onChange={() => updateEncoding("clone_top_quality", !cfg.clone_top_quality)} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[13px] font-semibold text-on-surface">Encrypt new videos</div>
-                <div className="text-[12px] text-on-surface-var">Apply AES-128 HLS encryption to new uploads.</div>
-              </div>
-              <Toggle enabled={cfg.encrypt_new_videos} onChange={() => updateEncoding("encrypt_new_videos", !cfg.encrypt_new_videos)} />
-            </div>
             <label className="block">
-              <span className={labelClass}>Extra FFmpeg params</span>
-              <input
-                type="text"
-                value={cfg.extra_ffmpeg_params || ""}
-                onChange={(e) => updateEncoding("extra_ffmpeg_params", e.target.value)}
-                placeholder="-movflags +faststart"
-                className={numberClass}
-              />
-              <span className="mt-1.5 block text-[11px] text-on-surface-var">Appended to every ffmpeg command. Leave blank unless you know what you&apos;re doing.</span>
+              <span className={labelClass}>Videos in Parallel</span>
+              <select value={cfg.video_concurrency} onChange={(e) => updateEncoding("video_concurrency", Number(e.target.value))} className={selectClass}>
+                {vv.videoConcurrency.map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? "— first video finishes sooner" : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-[#b45309]">⚠ Worker restart required to apply</span>
+                <button
+                  onClick={() => restartWorker(false)}
+                  disabled={workerRestarting}
+                  className="inline-flex items-center gap-1 rounded-[8px] border border-[#e5e7eb] bg-white px-3 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-high disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[13px]">restart_alt</span>
+                  {workerRestarting ? "Restarting..." : "Restart Worker"}
+                </button>
+              </div>
+            </label>
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-[11px] text-on-surface-var">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
+            <span>Status: <span className="font-bold" style={{ color: statusColor }}>{statusLabel}</span></span>
+            {workerStatus && <span>· {workerStatus.activeJobs} active · {workerStatus.waitingJobs} waiting · {workerStatus.delayedJobs} delayed</span>}
+            <button onClick={refreshWorkerStatus} className="ml-auto text-[11px] text-primary hover:underline">Refresh</button>
+          </div>
+        </div>
+
+        {/* ── Encoder settings (FFmpeg preset + Video codec + Keyframe interval) ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="flex flex-col gap-5">
+            <label className="block">
+              <span className={labelClass}><span className="material-symbols-outlined text-[14px] align-middle mr-1">settings</span>FFmpeg Preset</span>
+              <select value={cfg.ffmpeg_preset} onChange={(e) => updateEncoding("ffmpeg_preset", e.target.value)} className={selectClass}>
+                {vv.ffmpegPresets.map((p) => (
+                  <option key={p} value={p}>
+                    {p}{p === "veryfast" ? " — fast + clean (recommended)" : p === "medium" ? " — slower, slightly better quality" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1.5 block text-[11px] text-on-surface-var">Faster encoding = slightly bigger files. Doesn&apos;t change output file size much (uses target bitrate above).</span>
+            </label>
+
+            <label className="block">
+              <span className={labelClass}><span className="material-symbols-outlined text-[14px] align-middle mr-1">videocam</span>Video Codec</span>
+              <select value={cfg.video_codec} onChange={(e) => updateEncoding("video_codec", e.target.value)} className={selectClass}>
+                {vv.videoCodecs.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "h264" ? "H.264 — universal compatibility (recommended)"
+                      : c === "h265" ? "H.265 (HEVC) — 30-50% smaller but Firefox can't play"
+                      : c === "av1" ? "AV1 — smallest files, 5-20× slower encode"
+                      : c}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1.5 block text-[11px] text-on-surface-var">H.264 works everywhere. H.265 saves 30-50% storage but doesn&apos;t play in Firefox. AV1 saves 40-60% but encodes 5-20× slower and requires recent browsers.</span>
+            </label>
+
+            <label className="block">
+              <span className={labelClass}><span className="material-symbols-outlined text-[14px] align-middle mr-1">schedule</span>Keyframe Interval (GOP Size)</span>
+              <select value={cfg.keyframe_seconds} onChange={(e) => updateEncoding("keyframe_seconds", Number(e.target.value))} className={selectClass}>
+                {vv.keyframeSeconds.map((k) => (
+                  <option key={k} value={k}>
+                    {k} second{k !== 1 ? "s" : ""}{k === 2 ? " — balanced (recommended, Apple HLS spec)" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1.5 block text-[11px] text-on-surface-var">How often the encoder inserts a full-image keyframe. Shorter interval = faster seeking + quicker quality switching, but larger files. Auto-derived from source fps.</span>
             </label>
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <button onClick={saveEncoding} disabled={encodingSaving} className={btnPrimary}>
-            {encodingSaving ? "Saving..." : "Save Encoding Settings"}
+        {/* ── Rate Control (ABR / Constrained VBR + 2 sliders) ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-var">speed</span>
+            <h3 className="text-[15px] font-bold text-on-surface">Rate Control</h3>
+          </div>
+          <p className="mb-4 text-[12px] text-on-surface-var">Controls how FFmpeg distributes bits across scenes. Constrained VBR gives better quality-per-bit for streaming.</p>
+
+          <div className="mb-5 grid grid-cols-2 gap-3">
+            {(["abr", "constrained_vbr"] as const).map((mode) => {
+              const active = cfg.rate_control === mode;
+              const label = mode === "abr" ? "ABR" : "Constrained VBR";
+              const hint = mode === "abr" ? "simple" : "recommended";
+              return (
+                <button
+                  key={mode}
+                  onClick={() => updateEncoding("rate_control", mode)}
+                  className={`rounded-[10px] border-2 px-5 py-3 text-[13px] font-bold transition-all ${
+                    active ? "border-primary bg-primary/10 text-on-surface" : "border-[#e5e7eb] bg-white text-on-surface-var hover:border-primary/40"
+                  }`}
+                >
+                  {label} <span className="text-[11px] font-semibold text-on-surface-var">{hint}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {cfg.rate_control === "constrained_vbr" && (
+            <div className="mb-4 flex flex-col gap-5">
+              <div>
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className={labelClass + " mb-0"}>Maxrate Ratio</span>
+                  <span className="text-[14px] font-bold text-primary">{cfg.maxrate_ratio.toFixed(1)}×</span>
+                </div>
+                <input
+                  type="range"
+                  min={maxR.min} max={maxR.max} step={0.1}
+                  value={cfg.maxrate_ratio}
+                  onChange={(e) => updateEncoding("maxrate_ratio", Number(e.target.value))}
+                  className="w-full h-[4px] accent-primary cursor-pointer"
+                />
+                <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
+                  <span>{maxR.min.toFixed(1)}×</span>
+                  <span>1080p @ {sampleBitrate1080}k → maxrate {Math.round(sampleBitrate1080 * cfg.maxrate_ratio)}k</span>
+                  <span>{maxR.max.toFixed(1)}×</span>
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className={labelClass + " mb-0"}>Buffer Ratio</span>
+                  <span className="text-[14px] font-bold text-primary">{cfg.bufsize_ratio.toFixed(1)}×</span>
+                </div>
+                <input
+                  type="range"
+                  min={bufR.min} max={bufR.max} step={0.1}
+                  value={cfg.bufsize_ratio}
+                  onChange={(e) => updateEncoding("bufsize_ratio", Number(e.target.value))}
+                  className="w-full h-[4px] accent-primary cursor-pointer"
+                />
+                <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
+                  <span>{bufR.min.toFixed(1)}×</span>
+                  <span>1080p @ {sampleBitrate1080}k → bufsize {Math.round(sampleBitrate1080 * cfg.bufsize_ratio)}k</span>
+                  <span>{bufR.max.toFixed(1)}×</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <p className="text-[11px] text-on-surface-var leading-relaxed">
+            <span className="font-bold">ABR:</span> pure average bitrate — predictable file sizes, quality may drop on complex scenes.{" "}
+            <span className="font-bold">Constrained VBR:</span> allows bitrate spikes up to maxrate on complex scenes while saving on simple ones — better quality per bit. Used by Netflix, YouTube, and all professional streaming platforms.
+          </p>
+        </div>
+
+        {/* ── Clone top quality ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-[14px] font-bold text-on-surface">
+                <span className="material-symbols-outlined text-[18px] text-on-surface-var">content_copy</span>
+                Clone top quality
+              </div>
+              <p className="mt-1 text-[12px] text-on-surface-var">When the source video is already H.264 AND its resolution matches a quality preset (e.g., 1080p source → 1080p variant), skip re-encoding for that variant and just copy the source. Saves up to 80% encoding time for matching uploads. Lower-quality variants (720p, 480p, etc.) are still re-encoded normally.</p>
+            </div>
+            <Toggle enabled={cfg.clone_top_quality} onChange={() => updateEncoding("clone_top_quality", !cfg.clone_top_quality)} />
+          </div>
+        </div>
+
+        {/* ── AES-128 encryption ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-[14px] font-bold text-on-surface">
+                <span className="material-symbols-outlined text-[18px] text-on-surface-var">lock</span>
+                Encrypt new videos (AES-128)
+              </div>
+              <p className="mt-1 text-[12px] text-on-surface-var">New uploads are AES-128 encrypted at the HLS segment level. Segments are useless without the key, which the player fetches from an authenticated endpoint and which is <span className="font-bold">never</span> written to your CDN/storage.</p>
+              <p className="mt-1 text-[11px] text-on-surface-var italic">Works in Chrome, Firefox, and Edge. Safari native HLS does not yet support authenticated key delivery — encrypted videos will not play in Safari.</p>
+            </div>
+            <Toggle enabled={cfg.encrypt_new_videos} onChange={() => updateEncoding("encrypt_new_videos", !cfg.encrypt_new_videos)} />
+          </div>
+        </div>
+
+        {/* ── Extra FFmpeg parameters ── */}
+        <div className={`${sectionCard} mb-6`}>
+          <div className="mb-2 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-var">terminal</span>
+            <h3 className="text-[14px] font-bold text-on-surface">EXTRA FFMPEG PARAMETERS <span className="text-[11px] font-semibold text-on-surface-var">(ADVANCED)</span></h3>
+          </div>
+          <textarea
+            value={cfg.extra_ffmpeg_params || ""}
+            onChange={(e) => updateEncoding("extra_ffmpeg_params", e.target.value)}
+            rows={4}
+            placeholder="-tune film&#10;-profile:v high&#10;-level 4.1"
+            className="w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 font-mono text-[12px] text-[#1e1e2f] placeholder-[#9ca3af] focus:ring-2 focus:ring-primary/15 focus:border-primary/30 focus:outline-none transition"
+          />
+          <div className="mt-3 rounded-[8px] border-l-4 border-[#f59e0b] bg-[#fffbeb] px-4 py-2.5 text-[11.5px] text-[#92400e] leading-relaxed">
+            Appended directly to every FFmpeg encode command. One flag per line (e.g., <code className="font-mono">-tune film</code>). Incorrect values will cause encoding to fail. Max 500 characters. The flags <code className="font-mono">-i</code>, <code className="font-mono">-y</code>, <code className="font-mono">-filter_script</code>, and <code className="font-mono">-dump</code> are blocked for security.
+          </div>
+        </div>
+
+        {/* ── Estimated Impact (purple tinted) ── */}
+        <div className="rounded-[14px] border border-[#c7d2fe]/60 bg-gradient-to-br from-[#ede9fe] to-[#e0e7ff] p-6 mb-6">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-[#5b5a8b]">insights</span>
+            <h3 className="text-[14px] font-bold text-[#1e1e2f]">Estimated Impact</h3>
+          </div>
+          <p className="mb-4 text-[11.5px] text-[#475569]">Based on your current settings + a typical 10-min source video</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <div className="mb-1 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">
+                <span>📁</span> OUTPUT SIZE PER VIDEO
+              </div>
+              <div className="mb-3 text-[28px] font-extrabold leading-none text-[#1e1e2f]">~{totalMb} MB</div>
+              <div className="text-[11.5px] text-[#475569] space-y-0.5 font-mono">
+                {impactRows.length === 0
+                  ? <span className="italic">Pick at least one quality above.</span>
+                  : impactRows.map(r => (
+                    <div key={r.q}>{r.q} HLS: ~{r.mb} MB</div>
+                  ))}
+              </div>
+              <p className="mt-3 text-[11px] italic text-[#6b7280]">Only encoded up to source resolution allows — no upscaling.</p>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">
+                <span>☁</span> CLOUDFLARE R2 COST
+              </div>
+              <div className="text-[11.5px] text-[#475569] space-y-1">
+                <div>100 videos: <span className="font-bold">~${r2CostPer100.toFixed(2)}/mo</span> · ~{(totalMb * 100 / 1024).toFixed(1)} GB</div>
+                <div>1,000 videos: <span className="font-bold">~${(r2CostPer100 * 10).toFixed(2)}/mo</span> · ~{(totalMb * 1000 / 1024).toFixed(1)} GB</div>
+                <div>10,000 videos: <span className="font-bold">~${(r2CostPer100 * 100).toFixed(2)}/mo</span> · ~{(totalMb * 10000 / 1024 / 1024).toFixed(1)} TB</div>
+              </div>
+              <p className="mt-3 text-[11px] italic text-[#6b7280]">R2: $0.015/GB·mo · 10 GB free tier · zero egress fees</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Bottom bar: Reset | Unsaved | Save ── */}
+        <div className="flex items-center justify-between gap-3 mt-4">
+          <button
+            onClick={resetEncodingDefaults}
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#e5e7eb] bg-white px-4 py-2.5 text-[13px] font-semibold text-on-surface-var hover:bg-surface-high transition"
+          >
+            <span className="material-symbols-outlined text-[15px]">refresh</span>
+            Reset to defaults
           </button>
+          <div className="flex items-center gap-3">
+            {encodingDirty && (
+              <span className="text-[12px] font-bold text-primary">Unsaved changes</span>
+            )}
+            <button onClick={saveEncoding} disabled={encodingSaving || !encodingDirty} className={btnPrimary}>
+              <span className="material-symbols-outlined text-[15px] mr-1 align-middle">save</span>
+              {encodingSaving ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
         </div>
       </>
     );
