@@ -35,9 +35,26 @@ const { apiLimiter, authLimiter, playerLimiter, cdnLimiter, aesKeyLimiter } = re
 const { ipBlockMiddleware } = require('./middleware/ip-block');
 app.use(ipBlockMiddleware);
 
-// Health check (no auth, no rate limit, no CSRF — used for k8s/load balancer probes)
+// Health checks (no auth, no rate limit, no CSRF — used for k8s/load balancer probes)
+//
+// /api/health       — liveness (fast, always 200 if process is alive)
+// /api/health/ready — readiness (deep: probes DB, Redis, storage; 503 if degraded)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+const { checkHealth } = require('./services/health');
+app.get('/api/health/ready', async (req, res) => {
+  try {
+    const result = await checkHealth();
+    res.status(result.status === 'ok' ? 200 : 503).json(result);
+  } catch (err) {
+    res.status(503).json({
+      status: 'degraded',
+      timestamp: new Date().toISOString(),
+      error: err.message,
+    });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
