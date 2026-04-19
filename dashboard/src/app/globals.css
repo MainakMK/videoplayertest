@@ -176,7 +176,9 @@ body {
   overflow: hidden;
 }
 
-/* Left-accent stripe appears 20% opacity by default, 100% on hover */
+/* Left-accent stripe: clearly visible at rest, fully saturated on hover.
+   The legacy HTML used 0.2 default which was effectively invisible on
+   screenshots; bumped to 0.7 so the color reads immediately. */
 .card-accent {
   position: absolute;
   left: 0;
@@ -184,7 +186,7 @@ body {
   bottom: 0;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  opacity: 0.2;
+  opacity: 0.7;
   transition: opacity 0.2s;
 }
 .group:hover .card-accent,
