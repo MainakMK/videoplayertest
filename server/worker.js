@@ -94,7 +94,7 @@ function getVideoInfo(filePath) {
   });
 }
 
-function transcodeToHLS(filePath, outputDir, quality, ffmpegPreset = 'veryfast', keyInfoFile = null, keyframeInterval = 48, codecConfig = null, extraParams = [], rateControlOpts = null) {
+function transcodeToHLS(filePath, outputDir, quality, ffmpegPreset = 'veryfast', keyInfoFile = null, keyframeInterval = 48, codecConfig = null, extraParams = [], rateControlOpts = null, trimOpts = null) {
   return new Promise((resolve, reject) => {
     const cc = codecConfig || CODEC_CONFIGS.h264;
     const segExt = cc.segmentExt || '.jpeg';
@@ -102,9 +102,14 @@ function transcodeToHLS(filePath, outputDir, quality, ffmpegPreset = 'veryfast',
     const segmentPattern = path.join(outputDir, `${quality.name}_%03d${segExt}`);
     const playlistPath = path.join(outputDir, playlistName);
 
+    const inputOpts = buildTrimInputOpts(trimOpts);
     const opts = [
       `-c:v ${cc.encoder}`,
     ];
+    // Ensure -t / -to apply to the encoded output (paired with input-side -ss).
+    if (trimOpts && trimOpts.durationSec != null) {
+      opts.unshift(`-t ${trimOpts.durationSec}`);
+    }
     if (cc.tag) opts.push(`-tag:v ${cc.tag}`);
     if (cc.extraFlags && cc.extraFlags.length) opts.push(...cc.extraFlags);
     // SVT-AV1 uses numeric presets (0-13), not x264 preset names.
@@ -163,13 +168,33 @@ function transcodeToHLS(filePath, outputDir, quality, ffmpegPreset = 'veryfast',
       opts.push(`-hls_key_info_file ${keyInfoFile}`);
     }
 
-    ffmpeg(filePath)
+    const cmd = ffmpeg(filePath);
+    if (inputOpts.length) cmd.inputOptions(inputOpts);
+    cmd
       .outputOptions(opts)
       .output(playlistPath)
       .on('end', () => resolve(playlistPath))
       .on('error', (err) => reject(err))
       .run();
   });
+}
+
+/**
+ * Build the -ss / input-side trim options for a trim config.
+ * Returns an empty array when no trim requested.
+ *
+ * Why input-side -ss? It's fast (skips decoding of skipped section) and
+ * frame-accurate in modern FFmpeg (4.4+). When combined with -t on the
+ * output side, -t becomes relative to the seek point (output duration),
+ * giving the admin exactly the slice they asked for.
+ */
+function buildTrimInputOpts(trimOpts) {
+  if (!trimOpts || typeof trimOpts !== 'object') return [];
+  const opts = [];
+  if (trimOpts.trimInSec != null && trimOpts.trimInSec > 0) {
+    opts.push(`-ss ${trimOpts.trimInSec}`);
+  }
+  return opts;
 }
 
 /**
@@ -245,6 +270,8 @@ function cloneToHLS(filePath, outputDir, quality, keyInfoFile = null, codecConfi
  */
 function encodeAudioOnly(filePath, outputDir, codec, bitrate, channels, keyInfoFile = null, segmentExt = '.jpeg', opts2 = {}) {
   return new Promise((resolve, reject) => {
+    const trimOpts = opts2.trimOpts || null;
+    const inputOpts = buildTrimInputOpts(trimOpts);
     // opts2: { audioIndex, playlistTag, outputLabel }
     //   audioIndex   — which audio stream to extract (0-based). Default: all audio
     //                  (which FFmpeg reduces to first stream anyway)
@@ -286,8 +313,14 @@ function encodeAudioOnly(filePath, outputDir, codec, bitrate, channels, keyInfoF
     if (keyInfoFile) {
       opts.push(`-hls_key_info_file ${keyInfoFile}`);
     }
+    // Paired with input-side -ss: -t limits output duration (same slice as video).
+    if (trimOpts && trimOpts.durationSec != null) {
+      opts.unshift(`-t ${trimOpts.durationSec}`);
+    }
 
-    ffmpeg(filePath)
+    const cmd = ffmpeg(filePath);
+    if (inputOpts.length) cmd.inputOptions(inputOpts);
+    cmd
       .outputOptions(opts)
       .output(playlistPath)
       .on('end', () => resolve(playlistPath))
@@ -626,7 +659,21 @@ loadEncodingConfig()
     // doing nothing, hiding the failure from PM2/systemd.
     try {
       videoQueue.process(_initialVideoConcurrency, async (job) => {
-      const { videoId, filePath, originalFilename, storageType = 'local' } = job.data;
+      const { videoId, filePath, originalFilename, storageType = 'local', trimIn, trimOut } = job.data;
+
+      // Build trim opts once. Validated on upload, so we trust the values here
+      // but still fall back to null when unset (normal full-video encodes).
+      let trimOpts = null;
+      if (typeof trimIn === 'number' || typeof trimOut === 'number') {
+        const inSec = typeof trimIn === 'number' && trimIn > 0 ? trimIn : 0;
+        const outSec = typeof trimOut === 'number' && trimOut > inSec ? trimOut : null;
+        if (inSec > 0 || outSec != null) {
+          trimOpts = {
+            trimInSec: inSec > 0 ? inSec : null,
+            durationSec: outSec != null ? (outSec - inSec) : null,
+          };
+        }
+      }
 
       try {
         // Update status to processing AND touch updated_at so cleanup-cron's
@@ -646,9 +693,17 @@ loadEncodingConfig()
         // finite non-negative integer so downstream consumers (ffmpeg timestamps,
         // DB FLOAT column, JSON serialization) never see NaN.
         const durationNum = Number(rawDuration);
-        const duration = Number.isFinite(durationNum) && durationNum > 0
+        let duration = Number.isFinite(durationNum) && durationNum > 0
           ? Math.max(1, Math.floor(durationNum))
           : 0;
+        // If the upload is trimmed, clamp the reported duration to the trimmed slice.
+        // This keeps the UI's duration label and the player's timeline honest.
+        if (trimOpts && trimOpts.durationSec != null && trimOpts.durationSec > 0) {
+          duration = Math.max(1, Math.floor(trimOpts.durationSec));
+        } else if (trimOpts && trimOpts.trimInSec != null && trimOpts.trimInSec > 0 && duration > 0) {
+          // Only an in-point, no out-point: effective duration is (source - in)
+          duration = Math.max(1, Math.floor(duration - trimOpts.trimInSec));
+        }
 
         // Read encoding config fresh for this job (allows per-video setting changes
         // without restarting the worker)
@@ -814,8 +869,11 @@ loadEncodingConfig()
         let completed = 0;
         const runBatch = async (batch) => {
           await Promise.all(batch.map(async (quality) => {
-            // Use the clone path ONLY for the matched top-quality variant
-            const useClone = cloneablePreset && quality.name === cloneablePreset.name;
+            // Use the clone path ONLY for the matched top-quality variant.
+            // Skip the clone fast-path when trimming: -ss + -c copy can land on a
+            // non-keyframe and produce a silent gap at the start. Re-encode is
+            // both accurate and necessary for a trimmed output.
+            const useClone = !trimOpts && cloneablePreset && quality.name === cloneablePreset.name;
             if (useClone) {
               try {
                 await cloneToHLS(filePath, outputDir, quality, keyInfoFile, codecConfig);
@@ -823,10 +881,10 @@ loadEncodingConfig()
                 // Clone can fail on unusual codec profiles (e.g., 4:2:2, 10-bit, B-frames
                 // with bad timestamps). Fall back to a normal re-encode so the upload doesn't fail.
                 console.warn(`[worker] ${videoId}: clone of ${quality.name} failed (${cloneErr.message}); falling back to re-encode`);
-                await transcodeToHLS(filePath, outputDir, quality, ffmpegPreset, keyInfoFile, keyframeInterval, codecConfig, extraFfmpegParams, rateControlOpts);
+                await transcodeToHLS(filePath, outputDir, quality, ffmpegPreset, keyInfoFile, keyframeInterval, codecConfig, extraFfmpegParams, rateControlOpts, trimOpts);
               }
             } else {
-              await transcodeToHLS(filePath, outputDir, quality, ffmpegPreset, keyInfoFile, keyframeInterval, codecConfig, extraFfmpegParams, rateControlOpts);
+              await transcodeToHLS(filePath, outputDir, quality, ffmpegPreset, keyInfoFile, keyframeInterval, codecConfig, extraFfmpegParams, rateControlOpts, trimOpts);
             }
             completed++;
             job.progress(Math.round((completed / selectedQualities.length) * 80));
@@ -851,7 +909,7 @@ loadEncodingConfig()
       if (sourceAudioChannels >= 6) {
         try {
           console.log(`[worker] ${videoId}: encoding 5.1 AC3 surround audio (${sourceAudioChannels}ch source, ${cfg.ac3_bitrate}k)`);
-          await encodeAudioOnly(filePath, outputDir, 'ac3', `${cfg.ac3_bitrate}k`, 6, keyInfoFile, chosenSegmentExt);
+          await encodeAudioOnly(filePath, outputDir, 'ac3', `${cfg.ac3_bitrate}k`, 6, keyInfoFile, chosenSegmentExt, { trimOpts });
           hasSurroundTrack = true;
           console.log(`[worker] ${videoId}: AC3 5.1 rendition complete`);
         } catch (audioErr) {
@@ -907,6 +965,7 @@ loadEncodingConfig()
           await encodeAudioOnly(filePath, outputDir, 'aac', bitrate, 2, keyInfoFile, chosenSegmentExt, {
             audioIndex: track.audioIndex,
             playlistTag: tag,
+            trimOpts,
           });
           altAudioTracks.push({
             tag,

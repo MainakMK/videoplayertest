@@ -194,6 +194,28 @@ router.post('/upload', uploadVideo, async (req, res) => {
       encryptionEnabled = false;
     }
 
+    // Optional trim: encode only the range [trim_in, trim_out]. Both are
+    // seconds (float). Validated strictly — bad values reject with 400 so
+    // the admin knows the trim didn't apply (instead of a silent full-encode).
+    let trimIn = null, trimOut = null;
+    const parseTrim = (raw, label) => {
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error(`${label} must be a non-negative number of seconds`);
+      }
+      return Math.round(n * 1000) / 1000; // 3-decimal precision
+    };
+    try {
+      trimIn = parseTrim(req.body.trim_in, 'trim_in');
+      trimOut = parseTrim(req.body.trim_out, 'trim_out');
+    } catch (trimErr) {
+      return res.status(400).json({ error: trimErr.message });
+    }
+    if (trimIn !== null && trimOut !== null && trimOut <= trimIn) {
+      return res.status(400).json({ error: 'trim_out must be greater than trim_in' });
+    }
+
     const result = await db.query(
       `INSERT INTO videos (id, title, original_filename, file_size, status, storage_type, encoded_qualities, encryption_enabled, created_at, updated_at)
        VALUES ($1, $2, $3, $4, 'uploading', $5, $6, $7, NOW(), NOW())
@@ -216,6 +238,8 @@ router.post('/upload', uploadVideo, async (req, res) => {
       filePath: file.path || file.key || file.location,
       originalFilename: file.originalname,
       storageType: storageType,
+      trimIn,
+      trimOut,
     });
 
     triggerWebhooks('video.uploaded', { id: video.id, title: video.title });
