@@ -76,3 +76,66 @@ body {
 .animate-fadeUp {
   animation: fadeUp 0.4s ease-out;
 }
+
+/* Purple range slider — used across Encoding bitrate + ratio sliders.
+   Consistent purple track fill + thumb across Chrome/Firefox/Safari. */
+.slider-purple {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  outline: none;
+  accent-color: rgb(var(--primary-rgb));
+}
+.slider-purple::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+.slider-purple::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+.slider-purple::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(var(--primary-rgb));
+}
+.slider-purple::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  background: rgb(var(--primary-rgb));
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(91, 90, 139, 0.35);
+  cursor: pointer;
+  margin-top: -5px; /* center thumb on 6px track */
+  transition: transform 0.1s ease;
+}
+.slider-purple::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.slider-purple::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  background: rgb(var(--primary-rgb));
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(91, 90, 139, 0.35);
+  cursor: pointer;
+}
+/* Chrome: simulate the "filled left side" with a linear-gradient driven via CSS vars.
+   Each slider sets --fill-pct inline via style. */
+.slider-purple.has-fill {
+  background: linear-gradient(
+    to right,
+    rgb(var(--primary-rgb)) 0%,
+    rgb(var(--primary-rgb)) var(--fill-pct, 50%),
+    #e5e7eb var(--fill-pct, 50%),
+    #e5e7eb 100%
+  );
+}

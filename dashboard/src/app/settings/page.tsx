@@ -1269,11 +1269,11 @@ export default function SettingsPage() {
       updateEncodingBulk({ preset_tier: tier, ...preset });
     };
 
-    const tierMeta: Record<string, { icon: string; title: string; desc: string; est: string; tag: string; tagColor: string; bg: string }> = {
-      premium:   { icon: "star",         title: "Premium",   desc: "Highest quality, best for premium content", est: "~825 MB / 10-min video", tag: "+50% file size", tagColor: "#b45309", bg: "#fef3c7" },
-      balanced:  { icon: "check_circle", title: "Balanced",  desc: "Recommended for most platforms",            est: "~551 MB / 10-min video", tag: "Default",        tagColor: "#5b5a8b", bg: "#eceafd" },
-      optimized: { icon: "inventory_2",  title: "Optimized", desc: "Smaller files, save on storage costs",      est: "~395 MB / 10-min video", tag: "-28% file size", tagColor: "#047857", bg: "#d1fae5" },
-      custom:    { icon: "tune",         title: "Custom",    desc: "Set every bitrate manually below",          est: "Manual",                 tag: "Full control",   tagColor: "#475569", bg: "#e2e8f0" },
+    const tierMeta: Record<string, { icon: string; title: string; desc: string; est: string; tag: string; tagColor: string; bg: string; bubbleBg: string; bubbleColor: string }> = {
+      premium:   { icon: "star",         title: "Premium",   desc: "Highest quality, best for premium content", est: "~825 MB / 10-min video", tag: "+50% file size", tagColor: "#b45309", bg: "#fef3c7", bubbleBg: "#fef3c7", bubbleColor: "#b45309" },
+      balanced:  { icon: "check_circle", title: "Balanced",  desc: "Recommended for most platforms",            est: "~551 MB / 10-min video", tag: "Default",        tagColor: "#5b5a8b", bg: "#eceafd", bubbleBg: "#ede9fe", bubbleColor: "#5b5a8b" },
+      optimized: { icon: "inventory_2",  title: "Optimized", desc: "Smaller files, save on storage costs",      est: "~395 MB / 10-min video", tag: "-28% file size", tagColor: "#047857", bg: "#d1fae5", bubbleBg: "#d1fae5", bubbleColor: "#047857" },
+      custom:    { icon: "tune",         title: "Custom",    desc: "Set every bitrate manually below",          est: "Manual",                 tag: "Full control",   tagColor: "#475569", bg: "#e2e8f0", bubbleBg: "#f1f5f9", bubbleColor: "#475569" },
     };
 
     // Estimated Impact: sum per-quality sizes for the qualities the admin plans
@@ -1316,7 +1316,7 @@ export default function SettingsPage() {
             <h3 className="text-[15px] font-bold text-on-surface">Quality Preset</h3>
           </div>
           <p className="mb-5 text-[12px] text-on-surface-var">Pick a starting point — the bitrates below will fill in automatically</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {(["premium", "balanced", "optimized", "custom"] as const).map((tier) => {
               const meta = tierMeta[tier];
               const active = cfg.preset_tier === tier;
@@ -1324,19 +1324,25 @@ export default function SettingsPage() {
                 <button
                   key={tier}
                   onClick={() => applyTier(tier)}
-                  className={`rounded-[12px] border-2 px-4 py-4 text-left transition-all ${
-                    active
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-[#e5e7eb] bg-white hover:border-primary/40"
-                  }`}
+                  className="rounded-[14px] border-2 px-5 py-5 text-left transition-all"
+                  style={active
+                    ? { borderColor: "#5b5a8b", background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)", boxShadow: "0 4px 12px rgba(91, 90, 139, 0.08)" }
+                    : { borderColor: "#e5e7eb", background: "#fff" }}
+                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.borderColor = "#c4b5fd"; }}
+                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e7eb"; }}
                 >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px]" style={{ color: active ? "#5b5a8b" : "#6b7280" }}>{meta.icon}</span>
-                    <span className="text-[14px] font-bold text-on-surface">{meta.title}</span>
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <span
+                      className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full"
+                      style={{ background: meta.bubbleBg }}
+                    >
+                      <span className="material-symbols-outlined text-[17px]" style={{ color: meta.bubbleColor, fontVariationSettings: "'FILL' 1" }}>{meta.icon}</span>
+                    </span>
+                    <span className="text-[15px] font-extrabold text-on-surface">{meta.title}</span>
                   </div>
-                  <p className="mb-3 text-[11.5px] text-on-surface-var leading-snug">{meta.desc}</p>
-                  <div className="text-[12.5px] font-bold text-on-surface">{meta.est}</div>
-                  <div className="mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: meta.bg, color: meta.tagColor }}>
+                  <p className="mb-4 text-[11.5px] text-on-surface-var leading-relaxed">{meta.desc}</p>
+                  <div className="text-[13px] font-extrabold text-on-surface mb-2">{meta.est}</div>
+                  <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[10.5px] font-bold" style={{ background: meta.bg, color: meta.tagColor }}>
                     {meta.tag}
                   </div>
                 </button>
@@ -1376,7 +1382,8 @@ export default function SettingsPage() {
                     step={range.min >= 1000 ? 100 : 10}
                     value={value}
                     onChange={(e) => updateEncoding(r.key, Number(e.target.value) as never)}
-                    className="w-full h-[4px] accent-primary cursor-pointer"
+                    className="slider-purple has-fill w-full cursor-pointer"
+                    style={{ ["--fill-pct" as never]: `${((value - range.min) / (range.max - range.min)) * 100}%` }}
                   />
                   <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
                     <span>{range.min}k</span>
@@ -1433,16 +1440,19 @@ export default function SettingsPage() {
           <div className="grid grid-cols-2 gap-3">
             {(["stereo", "surround"] as const).map((mode) => {
               const active = cfg.audio_mode === mode;
-              const label = mode === "stereo" ? "Stereo AAC" : "5.1 Surround AC3 + AAC";
+              const label = mode === "stereo" ? "Stereo AAC" : "5.1 Surround";
+              const sub = mode === "stereo" ? "" : "AC3 + AAC";
               return (
                 <button
                   key={mode}
                   onClick={() => updateEncoding("audio_mode", mode)}
-                  className={`rounded-[10px] border-2 px-5 py-3 text-[13px] font-bold transition-all ${
-                    active ? "border-primary bg-primary/10 text-on-surface" : "border-[#e5e7eb] bg-white text-on-surface-var hover:border-primary/40"
-                  }`}
+                  className="rounded-[12px] border-2 px-6 py-3.5 text-[13.5px] font-bold transition-all"
+                  style={active
+                    ? { borderColor: "#5b5a8b", background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)", color: "#1e1e2f" }
+                    : { borderColor: "#e5e7eb", background: "#fff", color: "#596064" }}
                 >
                   {label}
+                  {sub && <span className="ml-1.5 text-[11px] font-semibold text-on-surface-var">{sub}</span>}
                 </button>
               );
             })}
@@ -1581,9 +1591,10 @@ export default function SettingsPage() {
                 <button
                   key={mode}
                   onClick={() => updateEncoding("rate_control", mode)}
-                  className={`rounded-[10px] border-2 px-5 py-3 text-[13px] font-bold transition-all ${
-                    active ? "border-primary bg-primary/10 text-on-surface" : "border-[#e5e7eb] bg-white text-on-surface-var hover:border-primary/40"
-                  }`}
+                  className="rounded-[12px] border-2 px-6 py-3.5 text-[13.5px] font-bold transition-all"
+                  style={active
+                    ? { borderColor: "#5b5a8b", background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)", color: "#1e1e2f" }
+                    : { borderColor: "#e5e7eb", background: "#fff", color: "#596064" }}
                 >
                   {label} <span className="text-[11px] font-semibold text-on-surface-var">{hint}</span>
                 </button>
@@ -1603,7 +1614,8 @@ export default function SettingsPage() {
                   min={maxR.min} max={maxR.max} step={0.1}
                   value={cfg.maxrate_ratio}
                   onChange={(e) => updateEncoding("maxrate_ratio", Number(e.target.value))}
-                  className="w-full h-[4px] accent-primary cursor-pointer"
+                  className="slider-purple has-fill w-full cursor-pointer"
+                  style={{ ["--fill-pct" as never]: `${((cfg.maxrate_ratio - maxR.min) / (maxR.max - maxR.min)) * 100}%` }}
                 />
                 <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
                   <span>{maxR.min.toFixed(1)}×</span>
@@ -1621,7 +1633,8 @@ export default function SettingsPage() {
                   min={bufR.min} max={bufR.max} step={0.1}
                   value={cfg.bufsize_ratio}
                   onChange={(e) => updateEncoding("bufsize_ratio", Number(e.target.value))}
-                  className="w-full h-[4px] accent-primary cursor-pointer"
+                  className="slider-purple has-fill w-full cursor-pointer"
+                  style={{ ["--fill-pct" as never]: `${((cfg.bufsize_ratio - bufR.min) / (bufR.max - bufR.min)) * 100}%` }}
                 />
                 <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
                   <span>{bufR.min.toFixed(1)}×</span>
