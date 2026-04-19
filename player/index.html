@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Video Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <link rel="stylesheet" href="/player/player.css?v=2">
+</head>
+<body>
+  <div id="player-container"></div>
+  <script src="/player/player.js"></script>
+  <script>
+    (function () {
+      var match = window.location.pathname.match(/\/(?:v|embed)\/([^/?#]+)/);
+      if (match && match[1]) {
+        initPlayer(match[1]);
+      } else {
+        document.getElementById('player-container').innerHTML =
+          '<div class="player-error"><div class="error-icon">&#9888;</div><div class="error-message">Invalid video URL</div></div>';
+      }
+    })();
+  </script>
+</body>
+</html>

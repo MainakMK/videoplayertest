@@ -1,0 +1,1562 @@
+/* Reset */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ── Container ── */
+#player-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#player-container.controls-hidden {
+  cursor: none;
+}
+
+/* ── Video ── */
+#player-container video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ── Loading Spinner ── */
+.player-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.player-loading.visible {
+  opacity: 1;
+}
+
+.player-loading .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error Overlay ── */
+.player-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: #fff;
+  z-index: 20;
+}
+
+.player-error .error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.7;
+}
+
+.player-error .error-message {
+  font-size: 16px;
+  opacity: 0.8;
+  text-align: center;
+  padding: 0 24px;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* ── Big Play Button (center, visible on pause only) ── */
+.player-big-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  width: 56px;
+  height: 56px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  background: var(--player-color, #00aaff);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  opacity: 1;
+}
+
+.player-big-play:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.player-big-play:active {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+
+.player-big-play svg {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  fill: #fff;
+  display: block;
+}
+
+.player-big-play.hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.85);
+  pointer-events: none;
+}
+
+/* ── Controls Bar ── */
+.player-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  /* Taller, darker gradient so controls read clearly against any video content */
+  background: linear-gradient(to top,
+                rgba(0, 0, 0, 0.95) 0%,
+                rgba(0, 0, 0, 0.75) 40%,
+                rgba(0, 0, 0, 0.35) 75%,
+                rgba(0, 0, 0, 0.0) 100%);
+  padding: 56px 16px 14px;
+  z-index: 15;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+
+#player-container.controls-hidden .player-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Progress Bar ── */
+.player-progress {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  margin-bottom: 10px;
+  border-radius: 99px;
+  transition: height 0.12s ease;
+}
+
+.player-progress:hover {
+  height: 6px;
+}
+
+.player-progress .progress-buffered {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 99px;
+  pointer-events: none;
+}
+
+.player-progress .progress-played {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--player-color, #00aaff);
+  border-radius: 99px;
+  pointer-events: none;
+}
+
+.player-progress .progress-handle {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--player-color, #00aaff);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.12s ease;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Chapter markers — thin vertical ticks along the seekbar at each chapter's
+   timestamp. Sit above the progress track but below the scrubber handle. */
+.player-progress .progress-chapter-markers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;   /* don't block seekbar clicks */
+  z-index: 1;
+}
+
+.player-progress .progress-chapter-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.player-progress .progress-chapter-marker:hover {
+  background: #fff;
+  width: 3px;
+}
+
+.player-progress:hover .progress-handle {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ── Scrub preview tooltip (sprite thumbnail + time) ──
+   Positioned via `left` set by JS; sits above the progress bar on hover. */
+.player-scrub-preview {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+.scrub-preview-thumb {
+  display: none;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  background-color: #000;
+}
+.scrub-preview-time {
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Controls Row ── */
+.player-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 44px;
+}
+
+.player-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0; /* allow time display to truncate if needed */
+}
+.player-cluster-left {
+  flex: 0 1 auto;
+}
+.player-cluster-right {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* ── Control Buttons ── */
+.player-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  /* Needed to contain the click-ripple <span> inserted on click */
+  position: relative;
+  overflow: hidden;
+  transition: background 0.22s cubic-bezier(0.22, 0.8, 0.3, 1),
+              color 0.22s cubic-bezier(0.22, 0.8, 0.3, 1),
+              transform 0.15s ease;
+  min-width: 42px;
+  min-height: 42px;
+  -webkit-tap-highlight-color: transparent;
+  /* No filter here — drop-shadow on thin SVG strokes creates a blurry halo
+     that reads as "white fuzz" around the icon at small sizes. Contrast
+     comes from the dark gradient behind the bar + bold stroke weight. */
+}
+
+.player-btn:hover {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+}
+
+.player-btn:active {
+  transform: scale(0.92);
+}
+
+/* Selected state — menu open, toggle on, etc. Uses the same solid accent
+   fill as hover so "hovered" and "selected" read as the same visual family. */
+.player-btn.active {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+}
+
+.player-btn svg {
+  width: 24px;
+  height: 24px;
+  /* Do NOT set fill here — CSS `fill` overrides the inline `fill="none"`
+     presentation attribute used by Lucide stroke icons, turning every
+     outlined icon into a solid white blob. Fill comes from each svg's
+     inline attribute: "none" for stroke icons, "currentColor" for playSolid. */
+}
+
+/* Make Lucide stroke heavier for better visibility on busy video content */
+.player-btn svg[stroke="currentColor"] {
+  stroke-width: 2.2;
+}
+
+/* Play button icon larger for emphasis */
+.player-btn-play svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* Settings gear rotates while the menu is open — nice tactile feedback that
+   matches what Bunny/YouTube-style players do. */
+.player-btn-quality svg {
+  transition: transform 0.35s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+.player-btn-quality.active svg {
+  transform: rotate(60deg);
+}
+
+/* Click ripple — spawned by JS at click point, fades and scales out.
+   Slower timing (650ms) matches the smooth Bunny-player feel the user likes;
+   anything under ~500ms reads as a flicker on modern displays. */
+.player-btn-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0);
+  opacity: 1;
+  pointer-events: none;
+  animation: player-btn-ripple 650ms cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+}
+@keyframes player-btn-ripple {
+  0%   { transform: scale(0);   opacity: 0.55; }
+  40%  { opacity: 0.45; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* ── Time Display ── */
+.player-time {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 0 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Volume ── */
+.player-volume {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-volume-slider {
+  width: 0;
+  overflow: hidden;
+  transition: width 0.2s ease, opacity 0.2s ease;
+  opacity: 0;
+}
+
+.player-volume:hover .player-volume-slider,
+.player-volume.active .player-volume-slider {
+  width: 64px;
+  opacity: 1;
+}
+
+/* Volume slider uses a CSS var `--vol-pct` (0..100) driven by JS for fill %.
+   The input itself is as tall as the thumb (12px) so the thumb isn't clipped
+   by the wrapper's overflow:hidden; the visible track is styled via
+   ::-webkit-slider-runnable-track to stay a thin 4px line. */
+.player-volume-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 12px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+}
+
+.player-volume-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(to right,
+                var(--player-color, #00aaff) 0%,
+                var(--player-color, #00aaff) var(--vol-pct, 100%),
+                rgba(255, 255, 255, 0.3) var(--vol-pct, 100%),
+                rgba(255, 255, 255, 0.3) 100%);
+  border-radius: 99px;
+  border: none;
+}
+
+.player-volume-slider input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: linear-gradient(to right,
+                var(--player-color, #00aaff) 0%,
+                var(--player-color, #00aaff) var(--vol-pct, 100%),
+                rgba(255, 255, 255, 0.3) var(--vol-pct, 100%),
+                rgba(255, 255, 255, 0.3) 100%);
+  border-radius: 99px;
+  border: none;
+}
+
+.player-volume-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px; /* centers the 12px thumb on the 4px track */
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.player-volume-slider input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Spacer ── */
+.player-spacer {
+  flex: 1;
+}
+
+/* ── Dropdown Menus ── */
+.player-menu-wrapper {
+  position: relative;
+}
+
+.player-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 140px;
+  z-index: 25;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.player-menu.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.player-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+}
+
+.player-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.player-menu-item.active {
+  color: var(--player-color, #ff4444);
+}
+
+/* Small accent dot for active items in the "simple" menus (captions/audio/chapters).
+   The settings menu uses its own radio-style indicator, so skip .settings-item. */
+.player-menu-item.active:not(.settings-item)::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--player-color, #ff4444);
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.player-menu-title {
+  padding: 6px 16px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+
+/* ── Settings Menu (white-panel, radio-button drill-down) ── */
+.player-settings-menu {
+  background: #ffffff;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  min-width: 220px;
+  padding: 6px 0;
+  /* overflow must stay visible so the caret triangle poking out the bottom
+     isn't clipped */
+  overflow: visible;
+  color: #1a1a1a;
+}
+
+/* Downward caret anchoring the popup to the gear button. Positioned so the
+   triangle's center aligns with the gear icon's horizontal center. */
+.player-settings-menu::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  right: 14px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid #ffffff;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.08));
+}
+
+.player-settings-menu .settings-view {
+  display: none;
+}
+
+/* Main view is first; sub-views are Quality (2) then Speed (3) — matches DOM order.
+   Each transition uses a directional slide: drilling in slides from the right,
+   returning to main slides from the left. */
+.player-settings-menu:not(.show-speed):not(.show-quality) .settings-view-main {
+  display: block;
+  animation: settings-slide-from-left 0.32s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+.player-settings-menu.show-quality .settings-view-sub:nth-of-type(2),
+.player-settings-menu.show-speed .settings-view-sub:nth-of-type(3) {
+  display: block;
+  animation: settings-slide-from-right 0.32s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+@keyframes settings-slide-from-right {
+  from { transform: translateX(22px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes settings-slide-from-left {
+  from { transform: translateX(-22px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+/* Main-view rows: icon · label · current value · chevron */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #1a1a1a;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.22, 0.8, 0.3, 1),
+              color 0.18s cubic-bezier(0.22, 0.8, 0.3, 1);
+  white-space: nowrap;
+}
+
+.settings-row:hover {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+}
+.settings-row:hover .settings-row-icon,
+.settings-row:hover .settings-row-value,
+.settings-row:hover .settings-row-chevron { color: #fff; }
+
+.settings-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #4a4a4a;
+  flex-shrink: 0;
+}
+.settings-row-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-row-label {
+  flex: 1;
+  font-weight: 600;
+}
+
+.settings-row-value {
+  color: #6a6a6a;
+  font-size: 12.5px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-row-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: #6a6a6a;
+  margin-left: -4px;
+}
+.settings-row-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Sub-view header: "‹ Label" — clickable, goes back to main */
+/* Back header gets the same rounded-pill treatment as items (margin + radius)
+   so hover/active background is a rounded pill, not edge-to-edge. */
+.settings-sub-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  margin: 2px 6px 6px;
+  border-radius: 8px;
+  color: #1a1a1a;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.22, 0.8, 0.3, 1),
+              color 0.18s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+.settings-sub-header:hover {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+}
+.settings-sub-header:hover .settings-back-icon { color: #fff; }
+
+/* ._no-hover is set by JS right after a sub-view opens, so the header
+   doesn't appear stuck in the hover state when the cursor happens to land
+   on it from the click through the main-view row. Cleared on mouseleave. */
+.settings-sub-header._no-hover:hover {
+  background: transparent;
+  color: #1a1a1a;
+}
+.settings-sub-header._no-hover:hover .settings-back-icon { color: #4a4a4a; }
+.settings-back-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #4a4a4a;
+  transition: color 0.18s ease;
+}
+.settings-back-icon svg { width: 16px; height: 16px; }
+
+/* Sub-view items: radio · label · optional HD/SD badge */
+.player-settings-menu .settings-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  margin: 2px 6px;
+  border-radius: 8px;
+  color: #1a1a1a;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.22, 0.8, 0.3, 1),
+              color 0.18s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.player-settings-menu .settings-item:hover,
+.player-settings-menu .player-menu-item.settings-item:hover {
+  background: var(--player-color, #00aaff) !important;
+  color: #fff !important;
+}
+.player-settings-menu .settings-item:hover .settings-item-label {
+  color: #fff;
+}
+.player-settings-menu .settings-item:hover .settings-item-radio {
+  border-color: #fff;
+}
+
+/* Active/selected: accent text + filled accent radio, no background pill.
+   Hover style (full accent pill) still applies when you hover the active item. */
+.player-settings-menu .settings-item.active {
+  color: var(--player-color, #00aaff);
+  font-weight: 600;
+}
+.player-settings-menu .settings-item.active .settings-item-radio {
+  border-color: var(--player-color, #00aaff);
+}
+.player-settings-menu .settings-item.active .settings-item-radio::after {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--player-color, #00aaff);
+}
+/* When hovering the active item, swap to the white-on-accent pill look */
+.player-settings-menu .settings-item.active:hover {
+  color: #fff;
+}
+.player-settings-menu .settings-item.active:hover .settings-item-radio {
+  border-color: #fff;
+}
+.player-settings-menu .settings-item.active:hover .settings-item-radio::after {
+  background: #fff;
+}
+
+.settings-item-radio {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #bdbdbd;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s ease;
+}
+
+.settings-item-label {
+  flex: 1;
+}
+
+/* HD / SD / 4K badges */
+.settings-item-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  background: #3a3a3a;
+  color: #fff;
+  flex-shrink: 0;
+}
+.settings-item-badge.badge-4k {
+  background: linear-gradient(135deg, #ff6a00, #e53935);
+}
+/* On hover (full accent pill), fade the badge bg so it reads against white text */
+.player-settings-menu .settings-item:hover .settings-item-badge {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Wider menu for chapters (title takes more space than "1080p" etc.) */
+.player-menu.player-menu-wide {
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+/* Chapter menu items: time (monospace, fixed width) + title (flex-grow) */
+.player-menu-wide .player-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: normal;   /* long titles can wrap */
+  padding: 8px 16px;
+}
+
+.player-menu-wide .player-menu-time {
+  font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Mono', monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--player-color, #ff4444);
+  flex-shrink: 0;
+  min-width: 42px;
+}
+
+.player-menu-wide .player-menu-label {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Captions Menu ── */
+.player-captions-menu {
+  background: #ffffff;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  min-width: 200px;
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Back header matches the settings sub-view header: rounded pill with
+   accent fill on hover, same margin/radius as the rows below. */
+.player-captions-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  margin: 2px 6px 6px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.18s cubic-bezier(0.22, 0.8, 0.3, 1),
+              color 0.18s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.player-captions-header:hover {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+}
+.player-captions-header:hover .captions-back-arrow { color: #fff; }
+
+/* Header-specific suppression — set by JS when the menu opens so the cursor
+   sitting on the header doesn't show a sticky "pre-selected" pill. Cleared
+   on the header's own mouseleave (hover returns on the way back). */
+.player-captions-header._no-hover:hover {
+  background: transparent;
+  color: #1a1a1a;
+}
+.player-captions-header._no-hover:hover .captions-back-arrow {
+  color: #4a4a4a;
+}
+
+/* Menu-wide suppression (still active for items on first open) */
+.player-captions-menu._no-hover .player-captions-header:hover {
+  background: transparent;
+  color: #1a1a1a;
+}
+.player-captions-menu._no-hover .player-captions-header:hover .captions-back-arrow {
+  color: #4a4a4a;
+}
+
+.captions-back-arrow {
+  margin-right: 2px;
+  font-size: 18px;
+  line-height: 1;
+  color: #4a4a4a;
+  transition: color 0.18s ease;
+}
+
+/* Captions menu items share the settings menu's visual language: rounded
+   pills inside the panel, accent-color fill on hover, and colored-text +
+   filled-radio for the active (selected) row. */
+.player-captions-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  margin: 2px 6px;
+  border-radius: 8px;
+  color: #1a1a1a;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.22, 0.8, 0.3, 1),
+              color 0.18s cubic-bezier(0.22, 0.8, 0.3, 1);
+  user-select: none;
+}
+
+.player-captions-item:hover {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+}
+.player-captions-item:hover .captions-radio { border-color: #fff; }
+
+/* Suppress hover briefly after menu opens so the row under the cursor
+   doesn't look permanently selected. Cleared on first mousemove. */
+.player-captions-menu._no-hover .player-captions-item:hover {
+  background: transparent;
+  color: #1a1a1a;
+}
+.player-captions-menu._no-hover .player-captions-item:hover .captions-radio {
+  border-color: #bdbdbd;
+}
+.player-captions-menu._no-hover .player-captions-item.active:hover {
+  color: var(--player-color, #00aaff);
+}
+.player-captions-menu._no-hover .player-captions-item.active:hover .captions-radio {
+  border-color: var(--player-color, #00aaff);
+}
+.player-captions-menu._no-hover .player-captions-item:hover .captions-lang-badge {
+  background: #3a3a3a;
+}
+
+.captions-radio {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #bdbdbd;
+  border-radius: 50%;
+  margin-right: 10px;
+  flex-shrink: 0;
+  position: relative;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease;
+}
+
+/* Selected state — accent-colored text + filled accent radio, NO pill fill.
+   Hovering the active row still flips to the pill treatment. */
+.player-captions-item.active {
+  color: var(--player-color, #00aaff);
+  font-weight: 600;
+}
+.player-captions-item.active .captions-radio {
+  border-color: var(--player-color, #00aaff);
+}
+.player-captions-item.active .captions-radio::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  background: var(--player-color, #00aaff);
+  border-radius: 50%;
+}
+.player-captions-item.active:hover {
+  color: #fff;
+}
+.player-captions-item.active:hover .captions-radio {
+  border-color: #fff;
+}
+.player-captions-item.active:hover .captions-radio::after {
+  background: #fff;
+}
+
+.captions-label {
+  flex: 1;
+}
+
+/* Language badge — dark pill like the HD/SD tags in the quality menu */
+.captions-lang-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  background: #3a3a3a;
+  color: #fff;
+  flex-shrink: 0;
+  margin-left: 8px;
+  text-transform: uppercase;
+}
+.player-captions-item:hover .captions-lang-badge {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ── Subtitles ── */
+.player-subtitles {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 12;
+  pointer-events: none;
+  width: 90%;
+  max-width: 700px;
+  transition: bottom 0.3s ease;
+}
+
+#player-container.controls-hidden .player-subtitles {
+  bottom: 24px;
+}
+
+.player-subtitles span {
+  display: inline;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* ── Watermark / Logo ── */
+.player-watermark {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  /* default = top-right */
+  top: 12px;
+  right: 12px;
+}
+
+/* Four corner positions via data-pos attribute */
+.player-watermark[data-pos="top-right"]    { top:12px; right:12px; bottom:auto; left:auto; }
+.player-watermark[data-pos="top-left"]     { top:12px; left:12px;  bottom:auto; right:auto; }
+.player-watermark[data-pos="bottom-right"] { bottom:56px; right:12px; top:auto; left:auto; }
+.player-watermark[data-pos="bottom-left"]  { bottom:56px; left:12px;  top:auto; right:auto; }
+
+/* Sizes */
+.player-watermark.watermark-small  img { max-height: 20px; max-width:  80px; }
+.player-watermark.watermark-medium img { max-height: 32px; max-width: 120px; }
+.player-watermark.watermark-large  img { max-height: 52px; max-width: 180px; }
+
+.player-watermark img {
+  max-height: 32px;
+  max-width: 120px;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+}
+
+/* Hover: gently increase opacity on the container */
+.player-container:hover .player-watermark { opacity: 1 !important; }
+
+/* ── Player Title Overlay ── */
+.player-title-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  padding: 10px 14px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0,0,0,.55) 0%, transparent 100%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity .25s ease;
+  text-shadow: 0 1px 4px rgba(0,0,0,.6);
+}
+
+.player-container:hover .player-title-overlay,
+.player-container.controls-visible .player-title-overlay {
+  opacity: 1;
+}
+
+/* Hide title when controls are hidden (fullscreen idle) */
+.player-controls.hidden ~ .player-title-overlay { opacity: 0; }
+
+/* ── Mobile Double-Tap Seek Feedback ──
+   Expanding semicircle ripple on the side the user double-tapped, with
+   "10 seconds" label. Touch-only — no mouse interaction triggers it. */
+.player-seek-feedback {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 7;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.18), transparent 65%);
+}
+.player-seek-feedback.side-left  { left: 0; border-top-right-radius: 50% 40%; border-bottom-right-radius: 50% 40%; }
+.player-seek-feedback.side-right { right: 0; border-top-left-radius: 50% 40%; border-bottom-left-radius: 50% 40%; }
+.player-seek-feedback .seek-feedback-arrows { font-size: 34px; line-height: 1; }
+.player-seek-feedback .seek-feedback-text { font-size: 13px; opacity: 0.9; }
+.player-seek-feedback.flash { animation: seek-feedback-flash 700ms ease-out; }
+@keyframes seek-feedback-flash {
+  0%   { opacity: 0; transform: scale(0.9); }
+  20%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+
+/* ── Picture-in-Picture Overlay ──
+   Shown over the player area while the video is actually playing in a
+   PiP window (so the main rectangle is empty). Clickable to return. */
+.player-pip-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  z-index: 6;
+  color: #fff;
+  background: rgba(10, 10, 10, 0.55);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-align: center;
+  padding: 20px;
+}
+#player-container.pip-active .player-pip-overlay { display: flex; }
+.player-pip-overlay:hover { background: rgba(10, 10, 10, 0.7); }
+.player-pip-overlay .pip-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.player-pip-overlay .pip-action {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ── Ad Overlay ── */
+.ad-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ad-overlay .ad-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ad-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffd700;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  z-index: 31;
+}
+
+.ad-skip-btn {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 31;
+  transition: background 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.ad-skip-btn:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ad-skip-btn.disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ad-click-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 30;
+  cursor: pointer;
+}
+
+/* ── Responsive breakpoints ──
+   Big desktop (≥1280px): scale up icons + button sizes proportionally
+   Desktop (≥1024px):     full layout with all buttons + expanded volume slider
+   Tablet (768-1023px):   slightly smaller buttons, hide PiP + external-link
+   Mobile (481-767px):    hide speed + external-link + PiP, compact time
+   Small mobile (≤480px): hide skip-10 + volume slider (keep mute toggle only)
+*/
+
+@media (min-width: 1280px) {
+  .player-controls {
+    padding: 64px 22px 16px;
+  }
+  .player-controls-row {
+    height: 50px;
+    gap: 8px;
+  }
+  .player-btn {
+    min-width: 46px;
+    min-height: 46px;
+    padding: 10px;
+  }
+  .player-btn svg {
+    width: 26px;
+    height: 26px;
+  }
+  .player-btn-play svg {
+    width: 28px;
+    height: 28px;
+  }
+  .player-time {
+    font-size: 15px;
+  }
+  .player-progress {
+    height: 5px;
+    margin-bottom: 12px;
+  }
+  .player-progress:hover {
+    height: 7px;
+  }
+  .player-big-play {
+    width: 64px;
+    height: 64px;
+  }
+  .player-big-play svg {
+    width: 26px;
+    height: 26px;
+  }
+  .player-volume:hover .player-volume-slider,
+  .player-volume.active .player-volume-slider {
+    width: 88px;
+  }
+  .player-volume-slider input[type="range"] {
+    width: 88px;
+  }
+}
+
+/* Mid-tablet (600-767px): compact buttons but keep all icons */
+@media (max-width: 767px) {
+  .player-controls {
+    padding: 44px 12px 10px;
+  }
+  .player-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 7px;
+  }
+  .player-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  .player-volume:hover .player-volume-slider,
+  .player-volume.active .player-volume-slider {
+    width: 56px;
+  }
+  .player-volume-slider input[type="range"] {
+    width: 56px;
+  }
+}
+
+/* Phone (≤599px): drop the least-used icons to avoid crowding */
+@media (max-width: 599px) {
+  .player-btn-pip {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .player-controls {
+    padding: 28px 8px 6px;
+  }
+  .player-controls-row {
+    gap: 2px;
+  }
+  .player-btn {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 6px;
+  }
+  .player-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  .player-btn-play svg {
+    width: 20px;
+    height: 20px;
+  }
+  .player-btn-skip {
+    display: none;          /* free up space on small screens */
+  }
+  .player-time {
+    font-size: 11px;
+    padding: 0 2px;
+  }
+  .player-subtitles span {
+    font-size: 14px;
+  }
+  .player-captions-menu {
+    min-width: 160px;
+  }
+  .player-captions-item {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .player-big-play {
+    width: 48px;
+    height: 48px;
+  }
+  .player-big-play svg {
+    width: 20px;
+    height: 20px;
+  }
+  .player-volume-slider {
+    display: none;          /* tap mute button only on phones */
+  }
+}
+
+/* ─────────────────────────────────────────
+   RESUME WATCHING BANNER
+   ───────────────────────────────────────── */
+.resume-banner {
+  position: absolute;
+  bottom: 56px;          /* sits above the controls bar */
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 30;
+  opacity: 0;
+  transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+  width: calc(100% - 32px);
+  max-width: 420px;
+}
+
+.resume-banner.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.resume-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(15, 15, 15, .88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+}
+
+.resume-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: rgba(255, 255, 255, .7);
+}
+
+.resume-banner-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.resume-banner-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .55);
+  margin-top: 1px;
+}
+
+.resume-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.resume-btn-restart,
+.resume-btn-resume {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background .15s, transform .1s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.resume-btn-restart {
+  background: rgba(255, 255, 255, .12);
+  color: rgba(255, 255, 255, .8);
+}
+
+.resume-btn-restart:hover {
+  background: rgba(255, 255, 255, .2);
+  transform: translateY(-1px);
+}
+
+.resume-btn-resume {
+  background: var(--player-color, #00aaff);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+
+.resume-btn-resume:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+/* Shrink on very small screens */
+@media (max-width: 420px) {
+  .resume-banner {
+    width: calc(100% - 16px);
+    bottom: 52px;
+  }
+  .resume-banner-inner {
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .resume-btn-restart,
+  .resume-btn-resume {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}
+
+/* ── Debug Stats Overlay (?debug=1) ── */
+.vp-debug-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 280px;
+  max-width: calc(100% - 24px);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  border-radius: 6px;
+  z-index: 2147483000;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.vp-debug-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.vp-debug-close {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.7;
+}
+.vp-debug-close:hover { opacity: 1; }
+.vp-debug-body {
+  padding: 8px 10px 10px;
+}
+.vp-debug-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  white-space: nowrap;
+}
+.vp-debug-key {
+  color: rgba(255, 255, 255, 0.55);
+}
+.vp-debug-val {
+  color: #fff;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.vp-debug-overlay.collapsed .vp-debug-body { display: none; }
+@media (max-width: 480px) {
+  .vp-debug-overlay {
+    width: calc(100% - 24px);
+    font-size: 10.5px;
+  }
+  .vp-debug-val { max-width: 60%; }
+}

@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 3000
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/worker.js"],
+      "port": 3001
+    },
+    {
+      "name": "migration-worker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/migration-worker.js"],
+      "port": 3006
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "dashboard"],
+      "port": 3002
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-videoplayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-videoplayer123}
+      POSTGRES_DB: ${POSTGRES_DB:-videoplayer}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-videoplayer}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-videoplayer}:${POSTGRES_PASSWORD:-videoplayer123}@db:5432/${POSTGRES_DB:-videoplayer}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/server/uploads
+      - videos:/var/www/videos
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["node", "server/worker.js"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-videoplayer}:${POSTGRES_PASSWORD:-videoplayer123}@db:5432/${POSTGRES_DB:-videoplayer}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/server/uploads
+      - videos:/var/www/videos
+
+  migration-worker:
+    build: .
+    restart: unless-stopped
+    command: ["node", "server/migration-worker.js"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-videoplayer}:${POSTGRES_PASSWORD:-videoplayer123}@db:5432/${POSTGRES_DB:-videoplayer}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/server/uploads
+      - videos:/var/www/videos
+
+volumes:
+  pgdata:
+  uploads:
+  videos:
