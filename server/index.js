@@ -4,9 +4,13 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
+const logger = require('./services/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Structured HTTP access log (replaces ad-hoc console.log for requests)
+app.use(logger.httpAccessMiddleware());
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Security middleware (applied in order)
@@ -105,26 +109,32 @@ app.get('/embed/:id', embedHeaders(), (req, res) => {
 
 // Error handler middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error('unhandled request error', {
+    method: req.method,
+    path: req.originalUrl || req.url,
+    status: err.status || 500,
+    error: err.message,
+    stack: err.stack,
+  });
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error'
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  logger.info('server listening', { port: PORT });
   // Seed encoding defaults on first boot (idempotent — won't overwrite existing rows)
   try {
     const { seedDefaults } = require('./services/encoding-config');
-    seedDefaults().catch(err => console.warn('[encoding-config] seedDefaults error:', err.message));
+    seedDefaults().catch(err => logger.warn('encoding-config seedDefaults error', { error: err.message }));
   } catch (e) {
-    console.error('[encoding-config] Failed to seed:', e.message);
+    logger.error('encoding-config failed to seed', { error: e.message });
   }
   // Start the auto-cleanup scheduler (no-op while auto_cleanup is disabled in settings)
   try {
     const { startCleanupScheduler } = require('./services/cleanup');
     startCleanupScheduler();
   } catch (e) {
-    console.error('[cleanup] Failed to start scheduler:', e.message);
+    logger.error('cleanup failed to start scheduler', { error: e.message });
   }
 });
