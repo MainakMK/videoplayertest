@@ -177,16 +177,26 @@ function configurableRateLimit(settingKey, defaultMax, windowMs, message) {
         return next();
       }
 
-      const max = settings[settingKey] || defaultMax;
+      const globalMax = settings[settingKey] || defaultMax;
       const window = settingKey === 'rate_limit_auth'
         ? (settings.rate_limit_auth_window || 15) * 60_000
         : windowMs;
 
-      const ip = req.headers['cf-connecting-ip']
-        || req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-        || req.ip;
+      // Rate-limit identity: prefer API key (per-key limits for automation) over IP.
+      // A single API key can be called from many IPs — the key is the fair unit.
+      let identity, max;
+      if (req.apiKeyId) {
+        identity = `key:${req.apiKeyId}`;
+        // Per-key override takes precedence over global; 0/null means no override.
+        max = req.apiKeyRateLimit || globalMax;
+      } else {
+        identity = req.headers['cf-connecting-ip']
+          || req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+          || req.ip;
+        max = globalMax;
+      }
 
-      const { count, resetTime } = await incrementCounter(settingKey, ip, window);
+      const { count, resetTime } = await incrementCounter(settingKey, identity, window);
 
       const remaining = Math.max(0, max - count);
       res.set({

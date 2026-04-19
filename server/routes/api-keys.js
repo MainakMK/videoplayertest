@@ -26,7 +26,7 @@ function hashKey(key) {
 router.get('/', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, name, permissions, created_at, expires_at, last_used_at,
+      `SELECT id, name, permissions, created_at, expires_at, last_used_at, rate_limit_per_minute,
               CONCAT('vp_', REPEAT('*', 12), RIGHT(key_hash, 8)) as key_preview
        FROM api_keys
        ORDER BY created_at DESC`
@@ -38,10 +38,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Clamp a requested per-key rate limit into a sane range (or null to mean "no override").
+function sanitizeRateLimit(value) {
+  if (value === null || value === undefined || value === '' || value === 0) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!Number.isInteger(n)) return null;
+  // Hard cap at 100k/min — higher is almost certainly a mistake. Min 1.
+  if (n < 1 || n > 100000) return null;
+  return n;
+}
+
 // POST / - Create a new API key
 router.post('/', async (req, res) => {
   try {
-    const { name, permissions, expires_in_days } = req.body;
+    const { name, permissions, expires_in_days, rate_limit_per_minute } = req.body;
 
     if (!name || name.trim().length === 0) {
       return res.status(400).json({ error: 'Name is required' });
@@ -64,11 +75,13 @@ router.post('/', async (req, res) => {
       expiresAt.setDate(expiresAt.getDate() + expires_in_days);
     }
 
+    const rateLimit = sanitizeRateLimit(rate_limit_per_minute);
+
     const result = await db.query(
-      `INSERT INTO api_keys (key_hash, name, permissions, expires_at)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, permissions, created_at, expires_at`,
-      [keyHash, name.trim(), JSON.stringify(perms), expiresAt]
+      `INSERT INTO api_keys (key_hash, name, permissions, expires_at, rate_limit_per_minute)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, permissions, created_at, expires_at, rate_limit_per_minute`,
+      [keyHash, name.trim(), JSON.stringify(perms), expiresAt, rateLimit]
     );
 
     res.json({
@@ -87,7 +100,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, permissions, expires_in_days } = req.body;
+    const { name, permissions, expires_in_days, rate_limit_per_minute } = req.body;
 
     const existing = await db.query('SELECT id FROM api_keys WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
@@ -120,6 +133,16 @@ router.put('/:id', async (req, res) => {
         expiresAt.setDate(expiresAt.getDate() + expires_in_days);
         updates.push(`expires_at = $${idx++}`);
         values.push(expiresAt);
+      }
+    }
+
+    if (rate_limit_per_minute !== undefined) {
+      const rl = sanitizeRateLimit(rate_limit_per_minute);
+      if (rl === null) {
+        updates.push(`rate_limit_per_minute = NULL`);
+      } else {
+        updates.push(`rate_limit_per_minute = $${idx++}`);
+        values.push(rl);
       }
     }
 

@@ -388,6 +388,9 @@ ALTER TABLE videos ADD COLUMN IF NOT EXISTS thumbnail_candidates JSONB DEFAULT '
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS custom_thumbnail_set BOOLEAN DEFAULT FALSE;
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS sprite_vtt_url TEXT;
 
+-- Per-API-key rate limit override (requests/minute). NULL = fall back to global rate_limit_api.
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS rate_limit_per_minute INTEGER DEFAULT NULL;
+
 -- ─────────────────────────────────────────
 -- AES-128 HLS ENCRYPTION KEYS
 -- ─────────────────────────────────────────

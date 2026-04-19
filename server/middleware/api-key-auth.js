@@ -46,7 +46,7 @@ function apiKeyAuth(requiredPermissions = []) {
       const keyHash = hashKey(key);
 
       const result = await db.query(
-        'SELECT id, permissions, expires_at FROM api_keys WHERE key_hash = $1',
+        'SELECT id, permissions, expires_at, rate_limit_per_minute FROM api_keys WHERE key_hash = $1',
         [keyHash]
       );
 
@@ -79,9 +79,13 @@ function apiKeyAuth(requiredPermissions = []) {
         [apiKey.id]
       ).catch(() => {});
 
-      // Attach to request
+      // Attach to request. `apiKeyRateLimit` is consumed by the rate-limit
+      // middleware to override the global per-IP limit with a per-key limit.
       req.apiKeyId = apiKey.id;
       req.apiKeyPermissions = permissions;
+      if (apiKey.rate_limit_per_minute && apiKey.rate_limit_per_minute > 0) {
+        req.apiKeyRateLimit = apiKey.rate_limit_per_minute;
+      }
 
       next();
     } catch (err) {
