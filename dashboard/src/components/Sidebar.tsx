@@ -48,16 +48,17 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         key={item.href}
         href={item.href}
         onClick={onClose}
-        className={`relative flex items-center gap-[11px] rounded-btn px-3 py-[9px] text-[13px] font-medium transition-all duration-150 ${
+        className={`relative flex items-center gap-[11px] rounded-[9px] px-3 py-[9px] text-[13px] font-medium transition-all duration-150 ${
           active
-            ? "bg-surface-card text-primary font-bold shadow-card"
+            ? "bg-surface-card text-primary font-bold"
             : "text-on-surface-var hover:bg-surface-high hover:text-on-surface"
         }`}
+        style={active ? { boxShadow: "0 2px 8px rgba(91, 90, 139, 0.08)" } : undefined}
       >
         {active && (
           <span
-            className="absolute left-0 w-[3px] rounded-r-sm bg-primary"
-            style={{ top: "22%", bottom: "22%" }}
+            className="absolute left-0 w-[3px] bg-primary"
+            style={{ top: "22%", bottom: "22%", borderRadius: "0 2px 2px 0" }}
           />
         )}
         <span

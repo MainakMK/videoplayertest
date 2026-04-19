@@ -123,22 +123,15 @@ function formatViewsShort(n: number): string {
   return n.toString();
 }
 
-function DeltaBadge({ pct, pill = false }: { pct: number | null | undefined; pill?: boolean }) {
+function DeltaBadge({ pct }: { pct: number | null | undefined; pill?: boolean }) {
   if (pct === null || pct === undefined || pct === 0) return null;
   const up = pct > 0;
   const arrow = up ? "\u2191" : "\u2193";
   const abs = Math.abs(pct).toFixed(1);
-  const color = up ? "#2e7d32" : "#c62828";
-  const bg = up ? "#e8f5e9" : "#fce4ec";
-  if (pill) {
-    return (
-      <span className="inline-flex items-center gap-0.5 rounded-full px-2.5 py-0.5 text-[9.5px] font-bold" style={{ color, background: bg }}>
-        {arrow} {abs}%
-      </span>
-    );
-  }
+  // Use the shared .badge-pill.badge-up/.badge-down tokens so delta styling stays
+  // consistent with the other badges across the app (Active Integrations, status, etc.).
   return (
-    <span className="inline-flex items-center gap-0.5 text-[12px] font-bold" style={{ color }}>
+    <span className={`badge-pill ${up ? "badge-up" : "badge-down"}`}>
       {arrow} {abs}%
     </span>
   );
@@ -246,261 +239,254 @@ export default function DashboardHome() {
 
   return (
     <DashboardLayout>
-      {/* ── Page Header ── */}
-      <div className="mb-6">
-        <h1 className="text-[22px] font-extrabold text-on-surface">Dashboard</h1>
-        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[.1em] text-on-surface-var">
-          <span>Home</span>
-          <span className="text-on-surface-var/40">&gt;</span>
-          <span className="text-primary">Overview</span>
-        </div>
-      </div>
-
+      {/* Page title + breadcrumb are rendered by DashboardLayout's topbar; no duplicate heading here */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-on-surface-var/20 border-t-primary" />
         </div>
       ) : (
         <>
-          {/* ── KPI Cards ── */}
-          <div className="rounded-card bg-white p-5 shadow-card" style={{ marginBottom: 20 }}>
-            <div className="grid grid-cols-2 gap-px lg:grid-cols-3 xl:grid-cols-5">
-              {/* Total Videos */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Total Videos</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#ededfa]">
-                    <span className="material-symbols-outlined text-[17px] text-primary">video_library</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">{totalVideoCount}</div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">Videos in archive</span>
-                  {(storage?.createdLast7d ?? 0) > 0 ? (
-                    <span className="inline-flex items-center rounded-full bg-[#e8f5e9] px-2.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[.04em] text-[#2e7d32]">+{storage?.createdLast7d} this week</span>
-                  ) : null}
+          {/* ── KPI Cards — independent cards w/ colored left accent stripes ── */}
+          <div className="grid grid-cols-2 gap-[14px] mb-5 md:grid-cols-3 xl:grid-cols-5">
+            {/* Total Videos */}
+            <div className="card-base fade-up delay-1">
+              <div className="card-accent" style={{ background: "#5b5a8b" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Total Videos</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#ededfa" }}>
+                  <span className="material-symbols-outlined text-[15px] text-primary">video_library</span>
                 </div>
               </div>
+              <div className="stat-num">{totalVideoCount}</div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">Videos in archive</span>
+                {(storage?.createdLast7d ?? 0) > 0 ? (
+                  <span className="badge-pill badge-up">+{storage?.createdLast7d} this week</span>
+                ) : null}
+              </div>
+            </div>
 
-              {/* Total Views */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Total Views</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#f3eafd]">
-                    <span className="material-symbols-outlined text-[17px] text-[#7c4dff]">visibility</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">{formatViewsShort(stats?.totalViews ?? 0)}</div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">Across all content</span>
-                  <DeltaBadge pct={stats?.viewsDeltaPct ?? null} />
+            {/* Total Views */}
+            <div className="card-base fade-up delay-2">
+              <div className="card-accent" style={{ background: "#755478" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Total Views</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#fdeafd" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#755478" }}>visibility</span>
                 </div>
               </div>
+              <div className="stat-num">{formatViewsShort(stats?.totalViews ?? 0)}</div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">Across all content</span>
+                <DeltaBadge pct={stats?.viewsDeltaPct ?? null} />
+              </div>
+            </div>
 
-              {/* Storage Used */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Storage Used</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#eceff1]">
-                    <span className="material-symbols-outlined text-[17px] text-[#607d8b]">database</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">
-                  {storageFmt.value}<span className="ml-0.5 text-[16px] font-semibold text-on-surface-var">{storageFmt.unit}</span>
-                </div>
-                <div className="mt-3">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[12px] text-on-surface-var">of {storageCapGB} GB</span>
-                    <span className="text-[12px] font-bold text-on-surface-var">{storagePct}%</span>
-                  </div>
-                  <div className="h-[5px] overflow-hidden rounded-full bg-[#ede7f6]">
-                    <div className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-[cubic-bezier(.4,0,.2,1)]" style={{ width: `${storagePct}%` }} />
-                  </div>
+            {/* Storage Used */}
+            <div className="card-base fade-up delay-3">
+              <div className="card-accent" style={{ background: "#607d8b" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Storage Used</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#eceff1" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#607d8b" }}>database</span>
                 </div>
               </div>
-
-              {/* Bandwidth */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Bandwidth</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#e3f2fd]">
-                    <span className="material-symbols-outlined text-[17px] text-[#2196f3]">wifi</span>
-                  </div>
+              <div className="stat-num">
+                {storageFmt.value}<span className="ml-0.5 text-[16px] font-medium text-on-surface-var">{storageFmt.unit}</span>
+              </div>
+              <div className="mt-[10px]">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[11px] text-on-surface-var">of {storageCapGB} GB</span>
+                  <span className="text-[11px] font-bold text-primary">{storagePct}%</span>
                 </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">
-                  {bwFmt.value}<span className="ml-0.5 text-[16px] font-semibold text-on-surface-var">{bwFmt.unit}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">This month</span>
-                  <DeltaBadge pct={bandwidth?.monthDeltaPct ?? null} pill />
+                <div className="storage-track">
+                  <div className="storage-fill" style={{ width: `${storagePct}%` }} />
                 </div>
               </div>
+            </div>
 
-              {/* Cloudflare R2 */}
-              <div className="flex flex-col justify-between px-6 py-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Cloudflare R2</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#fff4ec]">
-                    <span className="material-symbols-outlined text-[17px] text-[#f38020]">cloud</span>
-                  </div>
+            {/* Bandwidth */}
+            <div className="card-base fade-up delay-4">
+              <div className="card-accent" style={{ background: "#2196f3" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Bandwidth</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#e3f2fd" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#2196f3" }}>network_check</span>
                 </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">
-                  {r2Fmt.value}<span className="ml-0.5 text-[16px] font-semibold text-on-surface-var">{r2Fmt.unit}</span>
+              </div>
+              <div className="stat-num">
+                {bwFmt.value}<span className="ml-0.5 text-[16px] font-medium text-on-surface-var">{bwFmt.unit}</span>
+              </div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">This month</span>
+                <DeltaBadge pct={bandwidth?.monthDeltaPct ?? null} pill />
+              </div>
+            </div>
+
+            {/* Cloudflare R2 */}
+            <div className="card-base fade-up delay-5">
+              <div className="card-accent" style={{ background: "#f38020" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Cloudflare R2</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#fff4ec" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#f38020" }}>cloud</span>
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">{storage?.usage.r2.count ?? 0} video{(storage?.usage.r2.count ?? 0) !== 1 ? "s" : ""} &middot; R2</span>
-                  {!storage?.r2_configured && (
-                    <span className="inline-flex items-center rounded-full border border-on-surface/12 bg-[#f5f5f5] px-2.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[.04em] text-on-surface-var">Not configured</span>
-                  )}
-                </div>
+              </div>
+              <div className="stat-num">
+                {r2Fmt.value}<span className="ml-0.5 text-[16px] font-medium text-on-surface-var">{r2Fmt.unit}</span>
+              </div>
+              <div className="mt-[10px] flex items-center justify-between gap-2">
+                <span className="text-[11px] text-on-surface-var">{storage?.usage.r2.count ?? 0} video{(storage?.usage.r2.count ?? 0) !== 1 ? "s" : ""} &middot; R2</span>
+                {!storage?.r2_configured && (
+                  <span className="badge-pill badge-neutral">Not configured</span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* ── Engagement KPIs ── */}
-          <div className="rounded-card bg-white p-5 shadow-card" style={{ marginBottom: 20 }}>
-            <div className="grid grid-cols-2 gap-px lg:grid-cols-3 xl:grid-cols-6">
-              {/* Avg Watch Time */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Avg Watch Time</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#f3eafd]">
-                    <span className="material-symbols-outlined text-[17px] text-[#7c4dff]">schedule</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">{stats?.avgWatchTime ?? "0s"}</div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">Per view</span>
-                  <DeltaBadge pct={stats?.avgWatchDeltaPct ?? null} />
+          {/* ── Engagement KPI Cards — same card pattern, 6 cards ── */}
+          <div className="grid grid-cols-2 gap-[14px] mb-5 md:grid-cols-3 xl:grid-cols-6">
+            {/* Avg Watch Time */}
+            <div className="card-base fade-up delay-1">
+              <div className="card-accent" style={{ background: "#7c4dff" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Avg Watch Time</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#f3eafd" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#7c4dff" }}>schedule</span>
                 </div>
               </div>
-
-              {/* Completion Rate */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Completion Rate</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#e8f5e9]">
-                    <span className="material-symbols-outlined text-[17px] text-[#2e7d32]">check_circle</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">
-                  {stats?.completionRate !== null && stats?.completionRate !== undefined
-                    ? <>{stats.completionRate}<span className="ml-0.5 text-[16px] font-semibold text-on-surface-var">%</span></>
-                    : <span className="text-[22px] font-semibold text-on-surface-var">{"\u2014"}</span>}
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">{"Watched \u2265 90%"}</span>
-                  <DeltaBadge pct={stats?.completionDeltaPct ?? null} />
-                </div>
+              <div className="stat-num">{stats?.avgWatchTime ?? "0s"}</div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">Per view</span>
+                <DeltaBadge pct={stats?.avgWatchDeltaPct ?? null} />
               </div>
-
-              {/* Unique Viewers */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Unique Viewers</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#e3f2fd]">
-                    <span className="material-symbols-outlined text-[17px] text-[#2196f3]">group</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">{formatViewsShort(stats?.uniqueViewers ?? 0)}</div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">Distinct visitors</span>
-                  <DeltaBadge pct={stats?.uniqueViewersDeltaPct ?? null} />
-                </div>
-              </div>
-
-              {/* Active Embeds */}
-              <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Active Embeds</span>
-                  <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#fff8e1]">
-                    <span className="material-symbols-outlined text-[17px] text-[#f57c00]">public</span>
-                  </div>
-                </div>
-                <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">{stats?.activeEmbeds ?? 0}</div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[12px] text-on-surface-var">Host domains</span>
-                  <DeltaBadge pct={stats?.activeEmbedsDeltaPct ?? null} />
-                </div>
-              </div>
-
-              {/* Top Device */}
-              {(() => {
-                const d = stats?.devices ?? { desktop: 0, mobile: 0, tablet: 0 };
-                const entries = Object.entries(d) as [string, number][];
-                const [topKey, topPct] = entries.reduce((m, e) => e[1] > m[1] ? e : m, ["desktop", 0]);
-                const icon = topKey === "mobile" ? "smartphone" : topKey === "tablet" ? "tablet" : "desktop_windows";
-                const label = topKey.charAt(0).toUpperCase() + topKey.slice(1);
-                const hasData = entries.some(([, v]) => v > 0);
-                return (
-                  <div className="flex flex-col justify-between px-6 py-4 xl:border-r xl:border-on-surface/8">
-                    <div className="mb-4 flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Top Device</span>
-                      <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#eceff1]">
-                        <span className="material-symbols-outlined text-[17px] text-[#455a64]">{icon}</span>
-                      </div>
-                    </div>
-                    <div className="text-[32px] font-extrabold leading-none tracking-[-1px] text-on-surface">
-                      {hasData ? label : <span className="text-[22px] font-semibold text-on-surface-var">{"\u2014"}</span>}
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <span className="text-[12px] text-on-surface-var">{hasData ? `${topPct}% of views` : "No device data"}</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Processing Queue */}
-              {(() => {
-                const pending = queue?.pending ?? 0;
-                const failed = queue?.failed ?? 0;
-                const idle = pending === 0 && failed === 0;
-                const iconBg = failed > 0 ? "#fce4ec" : pending > 0 ? "#fff4e5" : "#e8f5e9";
-                const iconColor = failed > 0 ? "#c62828" : pending > 0 ? "#ef6c00" : "#2e7d32";
-                const iconName = failed > 0 ? "error" : pending > 0 ? "sync" : "check_circle";
-                return (
-                  <div className="flex flex-col justify-between px-6 py-4">
-                    <div className="mb-4 flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-[.1em] text-on-surface-var">Processing Queue</span>
-                      <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px]" style={{ background: iconBg }}>
-                        <span className="material-symbols-outlined text-[17px]" style={{ color: iconColor }}>{iconName}</span>
-                      </div>
-                    </div>
-                    <div className="text-[38px] font-extrabold leading-none tracking-[-2px] text-on-surface">{pending}</div>
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <span className="text-[12px] text-on-surface-var">
-                        {idle ? "Idle" : `${queue?.active ?? 0} active \u00b7 ${queue?.waiting ?? 0} waiting`}
-                      </span>
-                      {failed > 0 && (
-                        <span className="inline-flex items-center rounded-full bg-[#fce4ec] px-2.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[.04em] text-[#c62828]">{failed} failed</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
+
+            {/* Completion Rate */}
+            <div className="card-base fade-up delay-2">
+              <div className="card-accent" style={{ background: "#2e7d32" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Completion Rate</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#e8f5e9" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#2e7d32" }}>check_circle</span>
+                </div>
+              </div>
+              <div className="stat-num">
+                {stats?.completionRate !== null && stats?.completionRate !== undefined
+                  ? <>{stats.completionRate}<span className="ml-0.5 text-[16px] font-medium text-on-surface-var">%</span></>
+                  : <span className="text-[22px] font-semibold text-on-surface-var">{"\u2014"}</span>}
+              </div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">{"Watched \u2265 90%"}</span>
+                <DeltaBadge pct={stats?.completionDeltaPct ?? null} />
+              </div>
+            </div>
+
+            {/* Unique Viewers */}
+            <div className="card-base fade-up delay-3">
+              <div className="card-accent" style={{ background: "#2196f3" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Unique Viewers</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#e3f2fd" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#2196f3" }}>group</span>
+                </div>
+              </div>
+              <div className="stat-num">{formatViewsShort(stats?.uniqueViewers ?? 0)}</div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">Distinct visitors</span>
+                <DeltaBadge pct={stats?.uniqueViewersDeltaPct ?? null} />
+              </div>
+            </div>
+
+            {/* Active Embeds */}
+            <div className="card-base fade-up delay-4">
+              <div className="card-accent" style={{ background: "#f57c00" }} />
+              <div className="mb-[14px] flex items-center justify-between">
+                <span className="section-label">Active Embeds</span>
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#fff8e1" }}>
+                  <span className="material-symbols-outlined text-[15px]" style={{ color: "#f57c00" }}>public</span>
+                </div>
+              </div>
+              <div className="stat-num">{stats?.activeEmbeds ?? 0}</div>
+              <div className="mt-[10px] flex items-center justify-between">
+                <span className="text-[11px] text-on-surface-var">Host domains</span>
+                <DeltaBadge pct={stats?.activeEmbedsDeltaPct ?? null} />
+              </div>
+            </div>
+
+            {/* Top Device */}
+            {(() => {
+              const d = stats?.devices ?? { desktop: 0, mobile: 0, tablet: 0 };
+              const entries = Object.entries(d) as [string, number][];
+              const [topKey, topPct] = entries.reduce((m, e) => e[1] > m[1] ? e : m, ["desktop", 0]);
+              const icon = topKey === "mobile" ? "smartphone" : topKey === "tablet" ? "tablet" : "desktop_windows";
+              const label = topKey.charAt(0).toUpperCase() + topKey.slice(1);
+              const hasData = entries.some(([, v]) => v > 0);
+              return (
+                <div className="card-base fade-up delay-5">
+                  <div className="card-accent" style={{ background: "#455a64" }} />
+                  <div className="mb-[14px] flex items-center justify-between">
+                    <span className="section-label">Top Device</span>
+                    <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: "#eceff1" }}>
+                      <span className="material-symbols-outlined text-[15px]" style={{ color: "#455a64" }}>{icon}</span>
+                    </div>
+                  </div>
+                  <div className="stat-num" style={{ fontSize: hasData ? 30 : undefined }}>
+                    {hasData ? label : <span className="text-[22px] font-semibold text-on-surface-var">{"\u2014"}</span>}
+                  </div>
+                  <div className="mt-[10px] flex items-center justify-between">
+                    <span className="text-[11px] text-on-surface-var">{hasData ? `${topPct}% of views` : "No device data"}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Processing Queue */}
+            {(() => {
+              const pending = queue?.pending ?? 0;
+              const failed = queue?.failed ?? 0;
+              const idle = pending === 0 && failed === 0;
+              const accent = failed > 0 ? "#c62828" : pending > 0 ? "#ef6c00" : "#2e7d32";
+              const iconBg = failed > 0 ? "#fce4ec" : pending > 0 ? "#fff4e5" : "#e8f5e9";
+              const iconName = failed > 0 ? "error" : pending > 0 ? "sync" : "check_circle";
+              return (
+                <div className="card-base fade-up delay-6">
+                  <div className="card-accent" style={{ background: accent }} />
+                  <div className="mb-[14px] flex items-center justify-between">
+                    <span className="section-label">Processing Queue</span>
+                    <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px]" style={{ background: iconBg }}>
+                      <span className="material-symbols-outlined text-[15px]" style={{ color: accent }}>{iconName}</span>
+                    </div>
+                  </div>
+                  <div className="stat-num">{pending}</div>
+                  <div className="mt-[10px] flex items-center justify-between">
+                    <span className="text-[11px] text-on-surface-var">
+                      {idle ? "Idle" : `${queue?.active ?? 0} active \u00b7 ${queue?.waiting ?? 0} waiting`}
+                    </span>
+                    {failed > 0 && (
+                      <span className="badge-pill badge-down">{failed} failed</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* ── Charts Row ── */}
-          <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_1fr_320px]" style={{ marginBottom: 20, alignItems: "start" }}>
+          <div className="grid grid-cols-1 gap-[14px] xl:grid-cols-[1fr_1fr_320px]" style={{ marginBottom: 20, alignItems: "start" }}>
             {/* Views Over Time */}
-            <div className="rounded-card bg-surface-card p-[22px] shadow-card animate-[fadeUp_.35s_ease_both] [animation-delay:.1s]">
+            <div className="card-base fade-up delay-2">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <div className="text-[13.5px] font-bold text-on-surface">Views Over Time</div>
-                  <div className="mt-0.5 text-[10.5px] text-on-surface-var">Last {chartRange === "7d" ? "7 days" : chartRange === "30d" ? "30 days" : chartRange === "90d" ? "90 days" : chartRange === "6m" ? "6 months" : "year"}</div>
+                  <div className="mt-[2px] text-[10.5px] text-on-surface-var">Last {chartRange === "7d" ? "7 days" : chartRange === "30d" ? "30 days" : chartRange === "90d" ? "90 days" : chartRange === "6m" ? "6 months" : "year"}</div>
                 </div>
-                <div className="flex gap-0.5 rounded-btn p-[3px]" style={{ background: "rgb(240,244,247)" }}>
+                <div className="tab-bar">
                   {(["7d", "30d", "90d", "6m", "1y"] as const).map((r) => (
                     <button
                       key={r}
                       onClick={() => setChartRange(r)}
-                      className={`rounded-[7px] border-none px-3.5 py-[5px] text-[11px] font-semibold transition-all ${
-                        chartRange === r
-                          ? "text-primary"
-                          : "text-on-surface-var"
-                      }`}
-                      style={chartRange === r ? { background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.06)" } : { background: "transparent" }}
+                      data-active={chartRange === r}
                     >
                       {r}
                     </button>
@@ -563,13 +549,18 @@ export default function DashboardHome() {
             </div>
 
             {/* Top Videos */}
-            <div className="rounded-card bg-surface-card p-[22px] shadow-card animate-[fadeUp_.35s_ease_both] [animation-delay:.15s]">
+            <div className="card-base fade-up delay-3">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <div className="text-[13.5px] font-bold text-on-surface">Top Videos</div>
-                  <div className="mt-0.5 text-[10.5px] text-on-surface-var">By play count</div>
+                  <div className="mt-[2px] text-[10.5px] text-on-surface-var">By play count</div>
                 </div>
-                <button className="rounded-md bg-surface-low px-2.5 py-1 text-[11px] font-bold text-primary transition-colors hover:bg-surface-high">View All</button>
+                <button
+                  onClick={() => router.push("/videos")}
+                  className="rounded-[6px] bg-surface-low px-2.5 py-1 text-[11px] font-bold text-primary transition-colors hover:bg-surface-high"
+                >
+                  View All
+                </button>
               </div>
               <div style={{ height: 180 }}>
                 {topVids.length > 0 ? (
@@ -618,9 +609,9 @@ export default function DashboardHome() {
             </div>
 
             {/* Traffic Sources */}
-            <div className="rounded-card bg-surface-card p-[22px] shadow-card animate-[fadeUp_.35s_ease_both] [animation-delay:.2s]">
-              <div className="mb-1 text-[13.5px] font-bold text-on-surface">Traffic Sources</div>
-              <div className="mb-3.5 text-[10.5px] text-on-surface-var">Share of total views</div>
+            <div className="card-base fade-up delay-4">
+              <div className="mb-[2px] text-[13.5px] font-bold text-on-surface">Traffic Sources</div>
+              <div className="mb-[14px] text-[10.5px] text-on-surface-var">Share of total views</div>
               <div className="flex items-center gap-3.5 mb-3">
                 {/* Donut */}
                 <div className="relative shrink-0" style={{ width: 110, height: 110 }}>
@@ -688,14 +679,18 @@ export default function DashboardHome() {
           {/* ── Bottom Row: Recent Videos + Sidebar ── */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_290px]" style={{ alignItems: "start" }}>
             {/* Recent Videos */}
-            <div className="rounded-card bg-surface-card shadow-card animate-[fadeUp_.35s_ease_both] [animation-delay:.15s]">
-              <div className="flex items-center justify-between px-[22px] py-4" style={{ marginBottom: 0 }}>
+            <div className="card-base fade-up delay-3 !p-0 overflow-hidden">
+              <div className="flex items-center justify-between px-[22px] py-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-sm font-bold text-on-surface">Recent Videos</span>
-                  <span className="rounded-full bg-secondary-container px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[.05em] text-[#515064]">{totalVideoCount} total</span>
+                  <span className="text-[14px] font-bold text-on-surface">Recent Videos</span>
+                  <span className="badge-pill badge-neutral">{totalVideoCount} total</span>
                 </div>
-                <button onClick={() => router.push("/videos")} className="flex items-center gap-1 rounded-btn px-3.5 py-[7px] text-[11.5px] font-bold text-white shadow-[0_4px_12px_rgba(91,90,139,.25)] transition-all hover:shadow-[0_6px_18px_rgba(91,90,139,.35)] hover:-translate-y-px" style={{ background: "linear-gradient(135deg, #5b5a8b 0%, #4f4e7e 100%)" }}>
-                  <span className="material-symbols-outlined text-sm">add</span>Upload
+                <button
+                  onClick={() => router.push("/videos")}
+                  className="btn-primary-gradient"
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Upload
                 </button>
               </div>
 
@@ -763,25 +758,28 @@ export default function DashboardHome() {
             {/* Right Sidebar */}
             <div className="flex flex-col gap-3.5">
               {/* Active Integrations */}
-              <div className="rounded-card bg-surface-card p-[22px] shadow-card animate-[fadeUp_.35s_ease_both] [animation-delay:.2s]">
-                <div className="mb-3 text-[9.5px] font-bold uppercase tracking-[.1em] text-on-surface-var">Active Integrations</div>
-                <div className="flex flex-col gap-0.5">
+              <div className="card-base fade-up delay-4">
+                <div className="section-label mb-3">Active Integrations</div>
+                <div className="flex flex-col gap-1.5">
                   {[
-                    { name: "Main API Key", icon: "api", bg: "bg-[#111827]" },
-                    { name: "Auto-Sync", icon: "webhook", bg: "bg-[#1565c0]" },
-                    { name: "CDN Delivery", icon: "cloud", bg: "bg-[#e65100]" },
+                    { name: "Main API Key", icon: "api", bg: "#111827" },
+                    { name: "Auto-Sync", icon: "webhook", bg: "#1565c0" },
+                    { name: "CDN Delivery", icon: "cloud", bg: "#e65100" },
                   ].map((item) => (
-                    <div key={item.name} className="flex items-center gap-3 rounded-btn bg-surface-low p-3.5 transition-colors hover:bg-surface-high">
-                      <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#4caf50]" />
-                      <div className={`flex h-7 w-7 items-center justify-center rounded-[7px] ${item.bg}`}>
-                        <span className="material-symbols-outlined text-sm text-white">{item.icon}</span>
+                    <div key={item.name} className="flex items-center gap-3 rounded-[9px] bg-surface-low px-[14px] py-3 transition-colors hover:bg-surface-high">
+                      <span className="status-dot status-dot-green" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-[7px]" style={{ background: item.bg }}>
+                        <span className="material-symbols-outlined text-[14px] text-white">{item.icon}</span>
                       </div>
                       <span className="flex-1 text-[12.5px] font-medium text-on-surface">{item.name}</span>
                       <span className="material-symbols-outlined text-[17px] text-[#4caf50]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
                     </div>
                   ))}
                 </div>
-                <button onClick={() => router.push("/webhooks")} className="mt-2.5 w-full rounded-btn bg-surface-low py-2.5 text-[11.5px] font-bold text-primary transition-colors hover:bg-surface-high">
+                <button
+                  onClick={() => router.push("/webhooks")}
+                  className="btn-secondary-soft mt-3 w-full justify-center"
+                >
                   Configure Webhooks
                 </button>
               </div>

@@ -64,33 +64,36 @@ export default function DashboardLayout({
             <span className="material-symbols-outlined text-[24px]">menu</span>
           </button>
 
-          {/* Title + Breadcrumb */}
+          {/* Title + Breadcrumb — matches old HTML topbar styling */}
           <div className="flex flex-col justify-center">
-            <h1 className="text-lg font-bold leading-tight text-on-surface">{title}</h1>
+            <h2 className="text-[18px] font-extrabold leading-tight tracking-[-0.4px] text-on-surface">{title}</h2>
             <div className="flex items-center gap-[5px] mt-0.5">
               <span className="text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Home</span>
-              <span className="material-symbols-outlined text-[11px] text-outline-var">chevron_right</span>
-              <span className="text-[9.5px] font-bold uppercase tracking-[.08em] text-primary">Overview</span>
+              <span className="material-symbols-outlined text-[12px] text-on-surface-var">chevron_right</span>
+              <span className="text-[9.5px] font-bold uppercase tracking-[.08em] text-primary">
+                {title === "Dashboard" ? "Overview" : title}
+              </span>
             </div>
           </div>
 
           <div className="flex-1" />
 
-          {/* Right-side actions */}
-          <div className="hidden items-center gap-2 sm:flex">
+          {/* Right-side actions — search pill + ⌘K hint + theme toggle + bell + gear */}
+          <div className="hidden items-center gap-1.5 sm:flex">
             <div className="relative">
-              <span className="material-symbols-outlined pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-var/50 text-[18px]">search</span>
+              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-var/55 text-[16px]">search</span>
               <input
                 type="text"
                 placeholder="Search archive..."
-                className="w-44 rounded-input border-0 bg-surface-low py-1.5 pl-9 pr-3 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="search-pill pr-12 placeholder-on-surface-var/55"
               />
+              <span className="kbd-hint pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">⌘K</span>
             </div>
-            <button className="rounded-btn p-2 text-on-surface-var transition-colors hover:bg-on-surface/5 hover:text-on-surface">
-              <span className="material-symbols-outlined text-[20px]">notifications</span>
+            <button className="icon-btn" aria-label="Toggle theme" title="Toggle theme">
+              <span className="material-symbols-outlined text-[18px]">dark_mode</span>
             </button>
-            <button className="rounded-btn p-2 text-on-surface-var transition-colors hover:bg-on-surface/5 hover:text-on-surface">
-              <span className="material-symbols-outlined text-[20px]">settings</span>
+            <button className="icon-btn" aria-label="Notifications" title="Notifications">
+              <span className="material-symbols-outlined text-[18px]">notifications</span>
             </button>
           </div>
         </header>
