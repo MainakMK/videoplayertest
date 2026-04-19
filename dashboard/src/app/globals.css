@@ -6,21 +6,25 @@
 @tailwind utilities;
 
 :root {
-  --primary-rgb: 91, 90, 139;
-  --primary-dim-rgb: 79, 78, 126;
-  --primary-container-rgb: 187, 185, 241;
-  --tertiary-rgb: 117, 84, 120;
-  --surface-rgb: 247, 249, 251;
-  --surface-low-rgb: 240, 244, 247;
-  --surface-card-rgb: 255, 255, 255;
-  --on-surface-rgb: 44, 52, 55;
-  --on-surface-var-rgb: 89, 96, 100;
-  --surface-high-rgb: 227, 233, 237;
-  --surface-highest-rgb: 220, 228, 232;
-  --secondary-container-rgb: 227, 224, 249;
-  --outline-var-rgb: 172, 179, 183;
-  --error-rgb: 168, 54, 75;
-  --success-rgb: 46, 125, 50;
+  /* Space-separated so Tailwind's rgb(var(--x) / <alpha>) expands to valid CSS.
+     Comma-separated lists produce `rgb(248, 249, 251 / 1)` which is invalid and
+     silently falls back to transparent — that was why every bg-surface/text-primary
+     class was rendering as transparent/black until we switched to inline styles. */
+  --primary-rgb: 91 90 139;
+  --primary-dim-rgb: 79 78 126;
+  --primary-container-rgb: 187 185 241;
+  --tertiary-rgb: 117 84 120;
+  --surface-rgb: 248 249 251;
+  --surface-low-rgb: 240 244 247;
+  --surface-card-rgb: 255 255 255;
+  --on-surface-rgb: 44 52 55;
+  --on-surface-var-rgb: 89 96 100;
+  --surface-high-rgb: 227 233 237;
+  --surface-highest-rgb: 220 228 232;
+  --secondary-container-rgb: 227 224 249;
+  --outline-var-rgb: 172 179 183;
+  --error-rgb: 168 54 75;
+  --success-rgb: 46 125 50;
 }
 
 body {

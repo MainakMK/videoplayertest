@@ -680,14 +680,15 @@ export default function DashboardHome() {
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_290px]" style={{ alignItems: "start" }}>
             {/* Recent Videos */}
             <div className="card-base fade-up delay-3 !p-0 overflow-hidden">
-              <div className="flex items-center justify-between px-[22px] py-4">
+              <div className="flex items-center justify-between px-[22px] py-[18px]">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-[14px] font-bold text-on-surface">Recent Videos</span>
-                  <span className="badge-pill badge-neutral">{totalVideoCount} total</span>
+                  <span className="text-[15px] font-bold" style={{ color: "#2c3437" }}>Recent Videos</span>
+                  <span className="badge-pill badge-neutral">{totalVideoCount} TOTAL</span>
                 </div>
                 <button
-                  onClick={() => router.push("/videos")}
+                  onClick={() => router.push("/videos?upload=1")}
                   className="btn-primary-gradient"
+                  title="Upload a new video"
                 >
                   <span className="material-symbols-outlined text-[15px]">add</span>
                   Upload
@@ -702,17 +703,24 @@ export default function DashboardHome() {
                 <table className="w-full border-collapse text-left">
                   <thead>
                     <tr>
-                      <th className="px-3 pb-2.5 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Title</th>
-                      <th className="hidden px-3 pb-2.5 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var md:table-cell">Duration</th>
-                      <th className="hidden px-3 pb-2.5 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var sm:table-cell">Views</th>
-                      <th className="hidden px-3 pb-2.5 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var sm:table-cell">Status</th>
-                      <th className="hidden px-3 pb-2.5 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var lg:table-cell">Uploaded</th>
+                      <th className="px-[22px] pb-[10px] text-[9.5px] font-bold uppercase tracking-[.08em]" style={{ color: "#596064" }}>Title</th>
+                      <th className="hidden px-3 pb-[10px] text-[9.5px] font-bold uppercase tracking-[.08em] md:table-cell" style={{ color: "#596064" }}>Duration</th>
+                      <th className="hidden px-3 pb-[10px] text-[9.5px] font-bold uppercase tracking-[.08em] sm:table-cell" style={{ color: "#596064" }}>Views</th>
+                      <th className="hidden px-3 pb-[10px] text-[9.5px] font-bold uppercase tracking-[.08em] sm:table-cell" style={{ color: "#596064" }}>Status</th>
+                      <th className="hidden px-3 pb-[10px] text-[9.5px] font-bold uppercase tracking-[.08em] lg:table-cell" style={{ color: "#596064" }}>Uploaded</th>
                     </tr>
                   </thead>
                   <tbody>
                     {videos.map((video, idx) => (
-                      <tr key={video.id} className="transition-colors hover:bg-surface-low/40">
-                        <td className="border-t border-surface-low px-3 py-[11px]">
+                      <tr
+                        key={video.id}
+                        className="cursor-pointer transition-colors"
+                        onClick={() => router.push(`/videos?id=${video.id}`)}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f0f4f7"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        title={`Open ${video.title}`}
+                      >
+                        <td className="border-t px-[22px] py-[11px]" style={{ borderColor: "#f0f4f7" }}>
                           <div className="flex items-center gap-2.5">
                             <div
                               className="relative flex h-7 w-[44px] shrink-0 items-center justify-center overflow-hidden rounded-[5px]"
@@ -730,22 +738,22 @@ export default function DashboardHome() {
                                 <span className="material-symbols-outlined text-[13px] text-white" style={{ fontVariationSettings: "'FILL' 1" }}>play_circle</span>
                               )}
                             </div>
-                            <span className="text-[12.5px] font-semibold text-on-surface">{video.title}</span>
+                            <span className="text-[12.5px] font-semibold" style={{ color: "#2c3437" }}>{video.title}</span>
                           </div>
                         </td>
-                        <td className="hidden border-t border-surface-low px-3 py-[11px] font-mono text-[12.5px] text-on-surface-var md:table-cell">
+                        <td className="hidden border-t px-3 py-[11px] font-mono text-[12.5px] md:table-cell" style={{ borderColor: "#f0f4f7", color: "#596064" }}>
                           {formatDuration(video.duration)}
                         </td>
-                        <td className="hidden border-t border-surface-low px-3 py-[11px] font-mono text-[12.5px] text-on-surface sm:table-cell">
+                        <td className="hidden border-t px-3 py-[11px] font-mono text-[12.5px] sm:table-cell" style={{ borderColor: "#f0f4f7", color: "#2c3437" }}>
                           {(video.views_count ?? 0).toLocaleString()}
                         </td>
-                        <td className="hidden border-t border-surface-low px-3 py-[11px] sm:table-cell">
+                        <td className="hidden border-t px-3 py-[11px] sm:table-cell" style={{ borderColor: "#f0f4f7" }}>
                           <div className="flex items-center gap-[5px]">
                             <span className={`inline-block h-[7px] w-[7px] shrink-0 rounded-full ${statusDotColors[video.status] ?? "bg-[#9e9e9e]"}`} />
-                            <span className="text-[11.5px] text-on-surface-var">{statusLabels[video.status] ?? video.status}</span>
+                            <span className="text-[11.5px]" style={{ color: "#596064" }}>{statusLabels[video.status] ?? video.status}</span>
                           </div>
                         </td>
-                        <td className="hidden border-t border-surface-low px-3 py-[11px] text-[11.5px] text-on-surface-var lg:table-cell">
+                        <td className="hidden border-t px-3 py-[11px] text-[11.5px] lg:table-cell" style={{ borderColor: "#f0f4f7", color: "#596064" }}>
                           {timeAgo(video.created_at)}
                         </td>
                       </tr>
