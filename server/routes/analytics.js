@@ -698,4 +698,104 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+/**
+ * GET /videos/:id/retention — Audience retention curve for a single video.
+ *
+ * Returns an array of { sec, viewers, percent } points. Each point represents:
+ *   sec     — timestamp in the video (bucket start, seconds)
+ *   viewers — distinct viewers who reached at least this position
+ *   percent — viewers / total_viewers * 100  (0-100, monotonically non-increasing)
+ *
+ * Source data: viewer_progress table (each row = latest saved position per viewer).
+ * Because every viewer must pass through second T to reach any position > T,
+ * counting `position >= T` gives the audience at time T — the standard YouTube/
+ * Mux retention pattern.
+ *
+ * Query params:
+ *   buckets — number of sample points (default 100, min 10, max 500)
+ *
+ * Why 100 buckets by default? A 100-point curve renders nicely at any video
+ * length (short clip or 2-hour movie), makes the chart scale-independent, and
+ * keeps the payload small (~3KB JSON).
+ */
+router.get('/videos/:id/retention', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rawBuckets = parseInt(req.query.buckets, 10);
+    const buckets = Math.max(10, Math.min(500, Number.isFinite(rawBuckets) ? rawBuckets : 100));
+
+    // Fetch video duration (needed to build bucket boundaries)
+    const vr = await db.query('SELECT id, title, duration FROM videos WHERE id = $1', [id]);
+    if (vr.rows.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+    const video = vr.rows[0];
+    const videoDuration = Math.max(0, parseFloat(video.duration) || 0);
+    if (videoDuration <= 0) {
+      return res.json({ video_id: id, title: video.title, duration: 0, buckets, total_viewers: 0, curve: [] });
+    }
+
+    // Total unique viewers who reached any progress point.
+    const totalRes = await db.query(
+      `SELECT COUNT(DISTINCT viewer_id)::int AS total
+       FROM viewer_progress WHERE video_id = $1 AND duration > 0`,
+      [id]
+    );
+    const totalViewers = totalRes.rows[0].total;
+
+    if (totalViewers === 0) {
+      const emptyCurve = Array.from({ length: buckets }, (_, i) => ({
+        sec: Math.round((i / (buckets - 1)) * videoDuration * 10) / 10,
+        viewers: 0,
+        percent: 0,
+      }));
+      return res.json({
+        video_id: id,
+        title: video.title,
+        duration: videoDuration,
+        buckets,
+        total_viewers: 0,
+        curve: emptyCurve,
+      });
+    }
+
+    // For each bucket, count viewers whose position >= bucket_sec.
+    // Single query using generate_series + LATERAL join — avoids N round-trips.
+    const bucketSize = videoDuration / (buckets - 1);
+    const result = await db.query(
+      `WITH b AS (
+         SELECT generate_series(0, $2::int - 1) AS n
+       ),
+       positions AS (
+         SELECT position FROM viewer_progress
+         WHERE video_id = $1 AND duration > 0
+       )
+       SELECT
+         ROUND((b.n * $3::numeric)::numeric, 1) AS sec,
+         (SELECT COUNT(*) FROM positions p WHERE p.position >= b.n * $3)::int AS viewers
+       FROM b
+       ORDER BY b.n`,
+      [id, buckets, bucketSize]
+    );
+
+    const curve = result.rows.map(row => ({
+      sec: parseFloat(row.sec),
+      viewers: row.viewers,
+      percent: Math.round((row.viewers / totalViewers) * 1000) / 10, // 1 decimal place
+    }));
+
+    res.json({
+      video_id: id,
+      title: video.title,
+      duration: videoDuration,
+      buckets,
+      total_viewers: totalViewers,
+      curve,
+    });
+  } catch (err) {
+    console.error('Retention curve error:', err);
+    res.status(500).json({ error: 'Failed to compute retention' });
+  }
+});
+
 module.exports = router;
