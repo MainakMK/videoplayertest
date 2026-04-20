@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import DashboardLayout from "@/components/DashboardLayout";
 import TeamPanel from "@/components/TeamPanel";
+import TwoFactorCard from "@/components/TwoFactorCard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1084,7 +1085,18 @@ export default function SettingsPage() {
     ];
 
     return (
-      <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+      <div className="space-y-6">
+        {/* Two-factor authentication (per-admin) */}
+        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <div className="mb-4">
+            <h3 className="text-[15px] font-bold text-[#1e1e2f]">Two-Factor Authentication</h3>
+            <p className="mt-1 text-[12px] text-on-surface-var">Require a 6-digit code from your authenticator app in addition to your password when signing in.</p>
+          </div>
+          <TwoFactorCard onToast={(msg, tone) => toast(msg, tone ?? "success")} />
+        </div>
+
+        {/* App-wide security toggles */}
+        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <h3 className="mb-2 text-[15px] font-bold text-[#1e1e2f]">Security Settings</h3>
 
         <div className="flex flex-col">
@@ -1131,6 +1143,7 @@ export default function SettingsPage() {
           <button onClick={saveSecurity} disabled={securitySaving} className={btnPrimary}>
             {securitySaving ? "Saving..." : "Save Security Settings"}
           </button>
+        </div>
         </div>
       </div>
     );
