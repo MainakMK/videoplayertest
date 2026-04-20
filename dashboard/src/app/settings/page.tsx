@@ -275,6 +275,25 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [settingsQuery, setSettingsQuery] = useState("");
+
+  // Keyword map — lets the search box filter the tab strip by content, not just label.
+  const TAB_KEYWORDS: Record<Tab, string> = {
+    Storage: "storage local path r2 cloudflare bucket disk usage",
+    Encoding: "encoding ffmpeg codec bitrate quality preset 1080p 720p keyframe gop aes encrypt hls audio stereo surround",
+    Player: "player autoplay loop controls embed accent color responsive",
+    Domains: "domains dashboard player cdn dns zone fallback",
+    Ads: "ads vast vpaid preroll midroll postroll popup advertisement",
+    Email: "email smtp aws gmail outlook sendgrid postmark mailgun password",
+    Security: "security signed urls hotlink ip rate limit auth tokens rps",
+    Team: "team member user role owner editor admin invite",
+    Account: "account email username password 2fa two factor authentication",
+  };
+  const filteredTabs = (() => {
+    const q = settingsQuery.trim().toLowerCase();
+    if (!q) return TABS;
+    return TABS.filter((t) => t.toLowerCase().includes(q) || TAB_KEYWORDS[t].includes(q));
+  })();
 
   // Email (SMTP)
   const [emailLoaded, setEmailLoaded] = useState(false);
@@ -2191,28 +2210,28 @@ export default function SettingsPage() {
     <DashboardLayout>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Page breadcrumb header */}
-      <div className="mb-2">
-        <h1 className="text-[22px] font-extrabold text-on-surface">Settings</h1>
-        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[.1em] text-on-surface-var">
-          <span>Home</span>
-          <span className="text-on-surface-var/40">&gt;</span>
-          <span className="text-primary">Configuration</span>
-        </div>
-      </div>
-
-      <div className="border-b border-primary/20 mb-6" />
-
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-on-surface/15 border-t-primary" />
         </div>
       ) : (
         <>
-          {/* Settings sub-header */}
-          <div className="mb-4">
-            <h2 className="text-[16px] font-bold text-on-surface">Settings</h2>
-            <p className="mt-0.5 text-[13px] text-on-surface-var">Manage your archive configuration</p>
+          {/* Settings header — single title, with subtitle + find-a-setting search */}
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-[20px] font-extrabold tracking-[-0.2px] text-on-surface">Settings</h1>
+              <p className="mt-1 text-[13px] text-on-surface-var">Manage your archive configuration</p>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-var/55 text-[16px]">search</span>
+              <input
+                type="text"
+                value={settingsQuery}
+                onChange={(e) => setSettingsQuery(e.target.value)}
+                placeholder="Find a setting…"
+                className="w-full rounded-[10px] border border-on-surface/10 bg-white py-2.5 pl-9 pr-3 text-[13px] text-on-surface placeholder-on-surface-var/55 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition"
+              />
+            </div>
           </div>
 
           {/* Tabs — mobile dropdown + desktop horizontal strip */}
@@ -2222,14 +2241,14 @@ export default function SettingsPage() {
               onChange={(e) => setActiveTab(e.target.value as Tab)}
               className="w-full rounded-[10px] border border-on-surface/15 bg-white px-4 py-3 text-[14px] font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
             >
-              {TABS.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
+              {filteredTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
             </select>
           </div>
           <div
             className="hidden sm:flex mb-8 gap-1 rounded-[10px] border border-on-surface/10 bg-white p-1 overflow-x-auto"
             style={{ scrollbarWidth: "thin" }}
           >
-            {TABS.map((tab) => {
+            {filteredTabs.map((tab) => {
               const active = activeTab === tab;
               return (
                 <button
