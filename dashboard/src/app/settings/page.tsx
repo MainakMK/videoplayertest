@@ -2735,8 +2735,8 @@ export default function SettingsPage() {
             </select>
           </div>
           <div
-            className="hidden sm:flex mb-8 gap-1 rounded-[10px] border border-on-surface/10 bg-white p-1 overflow-x-auto"
-            style={{ scrollbarWidth: "thin" }}
+            className="hidden sm:flex mb-8 w-full gap-1 rounded-[10px] p-1"
+            style={{ background: "#f0f4f7" }}
           >
             {filteredTabs.map((tab) => {
               const active = activeTab === tab;
@@ -2744,10 +2744,10 @@ export default function SettingsPage() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className="shrink-0 px-4 py-2 text-[13px] font-semibold rounded-[8px] transition-all whitespace-nowrap"
+                  className="flex-1 px-4 py-2.5 text-[13px] font-semibold rounded-[8px] transition-all whitespace-nowrap text-center"
                   style={
                     active
-                      ? { background: "rgb(var(--surface-low-rgb))", color: "rgb(var(--on-surface-rgb))", boxShadow: "inset 0 0 0 1px rgba(91,90,139,0.25)" }
+                      ? { background: "#ffffff", color: "rgb(var(--on-surface-rgb))", boxShadow: "0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.04)" }
                       : { background: "transparent", color: "rgb(var(--on-surface-var-rgb))" }
                   }
                   onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.color = "rgb(var(--on-surface-rgb))"; }}
