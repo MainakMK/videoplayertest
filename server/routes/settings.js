@@ -626,6 +626,7 @@ router.put('/embed', async (req, res) => {
       player_color, autoplay, controls, loop,
       watermark_position, player_title,
       logo_opacity, logo_size, logo_link,
+      responsive_embed,
     } = req.body;
 
     if (player_color && !/^#[0-9a-fA-F]{6}$/.test(player_color)) {
@@ -645,7 +646,8 @@ router.put('/embed', async (req, res) => {
         player_title        = COALESCE($6,  player_title),
         logo_opacity        = COALESCE($7,  logo_opacity),
         logo_size           = COALESCE($8,  logo_size),
-        logo_link           = COALESCE($9,  logo_link)
+        logo_link           = COALESCE($9,  logo_link),
+        responsive_embed    = COALESCE($10, responsive_embed)
        WHERE video_id IS NULL`,
       [
         player_color || null,
@@ -657,6 +659,7 @@ router.put('/embed', async (req, res) => {
         logo_opacity !== undefined ? logo_opacity : null,
         logo_size    || null,
         logo_link    !== undefined ? logo_link    : null,
+        responsive_embed ?? null,
       ]
     );
 

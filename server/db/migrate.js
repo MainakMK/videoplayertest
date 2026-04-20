@@ -312,6 +312,7 @@ ALTER TABLE embed_settings ADD COLUMN IF NOT EXISTS player_title TEXT DEFAULT ''
 ALTER TABLE embed_settings ADD COLUMN IF NOT EXISTS logo_opacity FLOAT DEFAULT 0.75;
 ALTER TABLE embed_settings ADD COLUMN IF NOT EXISTS logo_size VARCHAR(10) DEFAULT 'medium';
 ALTER TABLE embed_settings ADD COLUMN IF NOT EXISTS logo_link TEXT DEFAULT '';
+ALTER TABLE embed_settings ADD COLUMN IF NOT EXISTS responsive_embed BOOLEAN DEFAULT TRUE;
 
 -- ─────────────────────────────────────────
 -- TORRENT DOWNLOADS (aria2)

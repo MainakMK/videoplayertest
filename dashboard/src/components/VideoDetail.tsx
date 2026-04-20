@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { api } from "@/lib/api";
+import { api, getPlayerBase } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -387,6 +387,8 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
 
   // Clipboard
   const [copied, setCopied] = useState(false);
+  const [playerBase, setPlayerBase] = useState("");
+  useEffect(() => { getPlayerBase().then(setPlayerBase); }, []);
 
   // Subtitle state
   const [subtitleRows, setSubtitleRows] = useState<SubtitleRow[]>([]);
@@ -747,7 +749,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
   };
 
   // ------ Copy embed code ------
-  const embedCode = `<iframe src="${typeof window !== "undefined" ? window.location.origin : ""}/embed/${videoId}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`;
+  const embedCode = `<iframe src="${playerBase}/embed/${videoId}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`;
 
   const copyEmbed = async () => {
     try {
@@ -818,7 +820,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
           </div>
           <button
             onClick={() => {
-              const link = `${window.location.origin}/embed/${videoId}`;
+              const link = `${playerBase}/embed/${videoId}`;
               navigator.clipboard.writeText(link).then(() => {
                 setToast("Share link copied");
                 setTimeout(() => setToast(null), 2000);
@@ -871,7 +873,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             <div className="aspect-video overflow-hidden rounded-card bg-black relative">
               {video.hls_ready ? (
                 <iframe
-                  src={`/v/${videoId}`}
+                  src={playerBase ? `${playerBase}/v/${videoId}` : undefined}
                   className="h-full w-full"
                   allowFullScreen
                   allow="autoplay"
@@ -1230,7 +1232,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 </button>
                 <button
                   onClick={() => {
-                    const link = `${typeof window !== "undefined" ? window.location.origin : ""}/embed/${videoId}`;
+                    const link = `${playerBase}/embed/${videoId}`;
                     navigator.clipboard.writeText(link).then(() => {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
@@ -1515,7 +1517,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 </button>
                 <button
                   onClick={() => {
-                    const link = `${window.location.origin}/embed/${videoId}`;
+                    const link = `${playerBase}/embed/${videoId}`;
                     navigator.clipboard.writeText(link).then(() => {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
@@ -1538,7 +1540,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                   <input
                     type="text"
                     readOnly
-                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/embed/${videoId}`}
+                    value={`${playerBase}/embed/${videoId}`}
                     className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 font-mono text-[12px] text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>

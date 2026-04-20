@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, invalidatePlayerBase } from "@/lib/api";
 import DashboardLayout from "@/components/DashboardLayout";
 import TeamPanel from "@/components/TeamPanel";
 import TwoFactorCard from "@/components/TwoFactorCard";
@@ -481,12 +481,13 @@ export default function SettingsPage() {
 
         // Embed / Player settings
         try {
-          const embedData = await api.get<{ embed_settings: { player_color?: string; autoplay?: boolean; controls?: boolean; loop?: boolean } }>("/settings/embed");
+          const embedData = await api.get<{ embed_settings: { player_color?: string; autoplay?: boolean; controls?: boolean; loop?: boolean; responsive_embed?: boolean } }>("/settings/embed");
           const es = embedData.embed_settings;
           if (es.player_color) { setPlayerColor(es.player_color); setPlayerColorInput(es.player_color); }
           if (es.autoplay !== undefined) setEmbedAutoplay(es.autoplay);
           if (es.controls !== undefined) setEmbedControls(es.controls);
           if (es.loop !== undefined) setEmbedLoop(es.loop);
+          if (es.responsive_embed !== undefined) setResponsiveEmbed(es.responsive_embed);
         } catch {
           // Embed settings not configured yet
         }
@@ -663,6 +664,7 @@ export default function SettingsPage() {
     setDomainsSaving(true);
     try {
       await api.put("/settings/domains", { domain_dashboard: dashboardDomain, domain_player: playerDomain, domain_cdn: cdnDomain });
+      invalidatePlayerBase();
       toast("Domain settings saved", "success");
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -798,6 +800,7 @@ export default function SettingsPage() {
         autoplay: embedAutoplay,
         controls: embedControls,
         loop: embedLoop,
+        responsive_embed: responsiveEmbed,
       });
       toast("Player settings saved", "success");
     } catch (e: unknown) {
@@ -1774,9 +1777,16 @@ export default function SettingsPage() {
     if (embedLoop) embedAttrs.push("loop");
     if (!embedControls) embedAttrs.push("controls=0");
     const queryString = embedAttrs.length ? `?${embedAttrs.join("&")}` : "";
+    // Build base URL from configured Player domain (Domains tab). Falls back to
+    // the dashboard origin if unset, so copy-paste still produces a working URL.
+    const rawDomain = (playerDomain || "").trim().replace(/\/+$/, "");
+    const embedBase = rawDomain
+      ? (/^https?:\/\//i.test(rawDomain) ? rawDomain : `https://${rawDomain}`)
+      : (typeof window !== "undefined" ? window.location.origin : "https://example.com");
+    const embedSrc = `${embedBase}/embed/VIDEO_ID${queryString}`;
     const embedCode = responsiveEmbed
-      ? `<div style="position:relative;padding-top:56.25%"><iframe src="https://example.com/embed/VIDEO_ID${queryString}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`
-      : `<iframe src="https://example.com/embed/VIDEO_ID${queryString}" width="640" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+      ? `<div style="position:relative;padding-top:56.25%"><iframe src="${embedSrc}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`
+      : `<iframe src="${embedSrc}" width="640" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
 
     const ToggleRow = ({ label, desc, enabled, onToggle }: { label: string; desc: string; enabled: boolean; onToggle: () => void }) => (
       <div className="flex items-center justify-between gap-4 py-3.5">
