@@ -1435,9 +1435,12 @@ export default function SettingsPage() {
               const brand: Record<string, { label: string; logo: React.ReactNode }> = {
                 ses: {
                   label: "AWS SES",
+                  // aws wordmark in navy with orange smile underneath — matches real brand mark
                   logo: (
-                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-                      <path fill="#FF9900" d="M13.527 16.002c-.43 0-.82.08-1.17.24-.35.16-.65.38-.89.67-.24.29-.43.64-.56 1.04-.13.4-.2.84-.2 1.31 0 .46.07.9.2 1.3.13.4.32.76.56 1.05.24.29.54.51.89.67.35.16.74.24 1.17.24.47 0 .9-.09 1.28-.26.38-.17.7-.41.95-.71.25-.3.45-.66.58-1.08.13-.42.2-.87.2-1.35 0-.45-.07-.87-.2-1.27-.13-.4-.33-.75-.58-1.04-.25-.29-.57-.52-.95-.69-.38-.17-.81-.26-1.28-.26zM6.028 8.002l8.7 3.95v-2.2L9.378 7.4l5.35-2.3v-2.2L6.03 6.8v1.2zm11.95-5.9l-8.7 3.95v2.2l5.35-2.35-5.35 2.35v2.2l8.7-3.95v-4.4zm.55 16.45c-.2.45-.5.85-.9 1.2-.4.35-.86.64-1.38.85-.52.21-1.07.32-1.65.32-.58 0-1.12-.11-1.62-.32-.5-.21-.94-.51-1.32-.89-.38-.38-.67-.83-.88-1.33-.21-.5-.31-1.03-.31-1.6 0-.56.1-1.09.31-1.59.21-.5.5-.94.88-1.32.38-.38.82-.68 1.32-.89.5-.21 1.04-.32 1.62-.32.58 0 1.13.11 1.65.32.52.21.98.5 1.38.85.4.35.7.75.9 1.2.2.45.3.93.3 1.45 0 .52-.1 1-.3 1.45z"/>
+                    <svg viewBox="0 0 48 30" width="30" height="20" aria-hidden>
+                      <text x="24" y="16" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontWeight="700" fontSize="14" fill="#232F3E" letterSpacing="-0.5">aws</text>
+                      <path d="M6 22 Q 24 30 42 22" fill="none" stroke="#FF9900" strokeWidth="2.2" strokeLinecap="round"/>
+                      <path d="M40 21.3 l2.5 -0.5 -0.8 2.4" fill="none" stroke="#FF9900" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   ),
                 },
@@ -1557,11 +1560,23 @@ export default function SettingsPage() {
             />
             <span className="text-[12.5px] text-on-surface">Use TLS/SSL (usually on port 465). Most modern providers on port 587 use STARTTLS and leave this off.</span>
           </label>
-          <div className="mt-6 flex justify-end gap-2 flex-wrap">
+          <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
+            <button
+              onClick={testEmail}
+              disabled={emailTesting || !emailCfg.smtp_host || !emailCfg.smtp_user}
+              title={!emailCfg.smtp_host || !emailCfg.smtp_user ? "Fill host and username to test" : `Sends a test to ${(emailTestTo || email) || "your admin email"}`}
+              className="inline-flex items-center gap-1.5 rounded-[10px] border border-primary/30 bg-primary/5 px-4 py-2.5 text-[13px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[15px]">science</span>
+              {emailTesting ? "Testing…" : "Test Connection"}
+            </button>
             <button onClick={saveEmail} disabled={emailSaving || !emailDirty} className={btnPrimary}>
               {emailSaving ? "Saving…" : "Save Email Settings"}
             </button>
           </div>
+          <p className="mt-2 text-[11px] text-on-surface-var">
+            Tip: <span className="font-semibold">Test Connection</span> uses the values above — no save required. It sends a real test message to the recipient set in the card below (falls back to your admin email).
+          </p>
         </div>
 
         {/* Test email card */}
