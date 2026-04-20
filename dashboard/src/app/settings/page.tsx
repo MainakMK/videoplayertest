@@ -2259,8 +2259,35 @@ export default function SettingsPage() {
       setAdEntries((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)));
     };
 
+    const vastEntries = adEntries.length;
+    const anyAdsOn = vastEnabled || popupEnabled;
+
+    const AdKpi = ({ label, value, sub, accent, tone }: { label: string; value: string; sub: string; accent: string; tone: "ok" | "warn" | "unset" }) => {
+      const toneBg = tone === "ok" ? "#ecfdf5" : tone === "warn" ? "#fffbeb" : "#f3f4f6";
+      const toneFg = tone === "ok" ? "#047857" : tone === "warn" ? "#b45309" : "#6b7280";
+      const toneDot = tone === "ok" ? "#10b981" : tone === "warn" ? "#f59e0b" : "#9ca3af";
+      return (
+        <div className="rounded-[12px] bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px]" style={{ borderLeftColor: accent }}>
+          <div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
+          <div className="mt-1.5 text-[18px] font-extrabold tracking-[-0.3px] text-[#1e1e2f] tabular-nums">{value}</div>
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ backgroundColor: toneBg, color: toneFg }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: toneDot }} />
+            {sub}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <>
+        {/* KPI strip — shell today; plug into real impression/revenue counts once available */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          <AdKpi label="Ads Status" value={anyAdsOn ? "On" : "Off"} sub={anyAdsOn ? "Serving" : "Disabled"} tone={anyAdsOn ? "ok" : "unset"} accent="#6366F1" />
+          <AdKpi label="VAST Tags" value={String(vastEntries)} sub={vastEnabled ? "VAST active" : "VAST off"} tone={vastEnabled ? "ok" : "unset"} accent="#10B981" />
+          <AdKpi label="Pop-ups" value={popupEnabled ? "On" : "Off"} sub={popupEnabled ? `Limit ${popupLimit}` : "Disabled"} tone={popupEnabled ? "ok" : "unset"} accent="#F59E0B" />
+          <AdKpi label="Est. Revenue (7d)" value="—" sub="Hook up reporting" tone="unset" accent="#F38020" />
+        </div>
+
         {/* Sub-tabs */}
         <div className="mb-6 flex gap-2">
           {([
