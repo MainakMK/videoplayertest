@@ -124,7 +124,36 @@ function ThumbnailPicker({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function stageFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image must be under 10 MB');
+      return;
+    }
+    setError(null);
+    setPendingFile(file);
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingPreview(URL.createObjectURL(file));
+  }
+
+  function clearPending() {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingFile(null);
+    setPendingPreview(null);
+  }
+
+  async function savePending() {
+    if (!pendingFile) return;
+    await uploadCustom(pendingFile);
+    clearPending();
+  }
 
   async function pickCandidate(idx: number) {
     setBusy(`cand-${idx}`);
@@ -221,8 +250,8 @@ function ThumbnailPicker({
           </div>
         </div>
       )}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-on-surface">Thumbnail</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-on-surface">Custom Thumbnail</h2>
         {customSet && (
           <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
             Custom
@@ -230,18 +259,70 @@ function ThumbnailPicker({
         )}
       </div>
 
-      {/* Current thumbnail preview (when no candidates yet, e.g. before encoding finishes) */}
-      {candidates.length === 0 && currentThumbnailUrl && (
-        <div className="mb-3 aspect-video overflow-hidden rounded-md bg-surface-low">
-          <img src={currentThumbnailUrl} alt="Current thumbnail" className="h-full w-full object-cover" />
+      {/* Preview + actions row */}
+      <div className="flex items-start gap-3">
+        <div className="w-[96px] h-[54px] shrink-0 rounded-[8px] overflow-hidden bg-surface-low flex items-center justify-center"
+          style={{
+            background: (pendingPreview || currentThumbnailUrl)
+              ? undefined
+              : "linear-gradient(135deg, #5b5a8b, #755478)",
+          }}
+        >
+          {(pendingPreview || currentThumbnailUrl) ? (
+            <img
+              src={pendingPreview || currentThumbnailUrl}
+              alt="Thumbnail preview"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="material-symbols-outlined text-white text-[20px]">image</span>
+          )}
         </div>
-      )}
+        <div className="flex-1 min-w-0">
+          <p className="text-[11.5px] text-on-surface-var mb-2">
+            JPG, PNG or WebP · 1280×720 recommended
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) stageFile(f); e.target.value = ''; }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!!busy}
+              className="inline-flex items-center gap-1.5 rounded-btn border border-on-surface/15 bg-surface-card px-3 py-1.5 text-[12.5px] font-semibold text-on-surface hover:bg-surface-low disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[15px] font-normal">upload</span>
+              Upload
+            </button>
+            <button
+              onClick={savePending}
+              disabled={!pendingFile || busy === 'upload'}
+              className="inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+              style={{ background: (!pendingFile || busy === 'upload') ? "#5b5a8b" : "linear-gradient(to right, rgb(91,90,139), rgb(79,78,126))" }}
+            >
+              {busy === 'upload' ? 'Saving…' : 'Save Thumbnail'}
+            </button>
+            {pendingFile && !busy && (
+              <button
+                onClick={clearPending}
+                className="text-[11.5px] font-medium text-on-surface-var hover:text-on-surface underline"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
-      {/* Candidate grid */}
+      {/* Candidate grid (when encoding produced auto frames) */}
       {candidates.length > 0 && (
-        <>
-          <p className="mb-2 text-[11.5px] text-on-surface-var">Pick an auto-generated frame</p>
-          <div className="mb-4 grid grid-cols-3 gap-2">
+        <div className="mt-4 pt-4 border-t border-on-surface/5">
+          <p className="mb-2 text-[11.5px] text-on-surface-var">Or pick an auto-generated frame</p>
+          <div className="grid grid-cols-3 gap-2">
             {[1, 2, 3].map((idx) => {
               const cand = candidates.find(c => c.index === idx);
               const active = !customSet && cand && currentThumbnailUrl.split('?')[0] === cand.url.split('?')[0];
@@ -268,37 +349,10 @@ function ThumbnailPicker({
               );
             })}
           </div>
-        </>
+        </div>
       )}
-
-      {/* Upload custom */}
-      <div className="flex items-center gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCustom(f); e.target.value = ''; }}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!!busy}
-          className="flex-1 rounded-btn border border-on-surface/15 bg-surface-card px-3 py-2 text-[12.5px] font-medium text-on-surface-var transition hover:bg-surface-low disabled:opacity-50"
-        >
-          {busy === 'upload' ? 'Uploading...' : customSet ? 'Replace custom image' : 'Upload custom image'}
-        </button>
-      </div>
-
-      <p className="mt-2 text-[11.5px] text-on-surface-var">
-        PNG, JPG, WEBP or GIF · up to 10 MB · drag &amp; drop supported
-      </p>
 
       {error && <p className="mt-2 text-[11.5px] text-error">{error}</p>}
-      {!candidates.length && !customSet && (
-        <p className="mt-2 text-[11.5px] text-on-surface-var">
-          Candidates will appear after encoding completes.
-        </p>
-      )}
     </div>
   );
 }
@@ -871,25 +925,13 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="text-base font-semibold text-on-surface">Chapters</h2>
-                <div className="flex items-center gap-2">
-                  {chapters.length > 0 && (
-                    <button
-                      onClick={handleSaveChapters}
-                      disabled={savingChapters}
-                      className="inline-flex items-center gap-1 rounded-btn bg-primary px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[15px] font-normal">save</span>
-                      {savingChapters ? "Saving…" : "Save"}
-                    </button>
-                  )}
-                  <button
-                    onClick={addChapter}
-                    className="inline-flex items-center gap-1 rounded-btn bg-surface-low px-3 py-1.5 text-[12px] font-semibold text-on-surface hover:bg-surface-high"
-                  >
-                    <span className="material-symbols-outlined text-[15px] font-normal">add</span>
-                    Add chapter
-                  </button>
-                </div>
+                <button
+                  onClick={addChapter}
+                  className="inline-flex items-center gap-1 rounded-btn bg-surface-low px-3 py-1.5 text-[12px] font-semibold text-on-surface hover:bg-surface-high"
+                >
+                  <span className="material-symbols-outlined text-[15px] font-normal">add</span>
+                  Add chapter
+                </button>
               </div>
 
               {chapters.length === 0 ? (
@@ -927,6 +969,17 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                   ))}
                 </div>
               )}
+
+              {/* Full-width Save Chapters button */}
+              <button
+                onClick={handleSaveChapters}
+                disabled={savingChapters || chapters.length === 0}
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)] disabled:opacity-50 disabled:shadow-none"
+                style={{ background: "linear-gradient(to right, rgb(91,90,139), rgb(79,78,126))" }}
+              >
+                <span className="material-symbols-outlined text-[16px] font-normal">save</span>
+                {savingChapters ? "Saving…" : "Save Chapters"}
+              </button>
             </div>
 
             {/* Subtitles */}
@@ -1040,24 +1093,52 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 {subDropActive ? "Drop subtitle files here" : "New Subtitle + or drop files here"}
               </div>
 
-              {/* Save / Reset buttons */}
-              {subtitleRows.length > 0 && (
-                <div className="mt-4 flex items-center justify-center gap-3">
-                  <button
-                    onClick={handleSaveSubtitles}
-                    disabled={savingSubs}
-                    className="rounded-btn bg-success px-4 py-2 text-sm font-medium text-white hover:bg-success/80 disabled:opacity-50"
-                  >
-                    {savingSubs ? "Saving..." : "Update"}
-                  </button>
-                  <button
-                    onClick={fetchSubtitles}
-                    className="rounded-btn bg-surface-low px-4 py-2 text-sm font-medium text-on-surface hover:bg-on-surface/10"
-                  >
-                    Reset
-                  </button>
-                </div>
-              )}
+              {/* Action row: Update / Reset / Delete — always visible */}
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  onClick={handleSaveSubtitles}
+                  disabled={savingSubs || subtitleRows.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-btn px-3.5 py-1.5 text-[12.5px] font-bold text-white shadow-sm transition-opacity disabled:opacity-40"
+                  style={{ background: "linear-gradient(to right, rgb(91,90,139), rgb(79,78,126))" }}
+                >
+                  <span className="material-symbols-outlined text-[15px] font-normal">save</span>
+                  {savingSubs ? "Saving…" : "Update"}
+                </button>
+                <button
+                  onClick={fetchSubtitles}
+                  disabled={savingSubs}
+                  className="inline-flex items-center gap-1.5 rounded-btn bg-surface-low px-3.5 py-1.5 text-[12.5px] font-semibold text-on-surface hover:bg-surface-high disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-[15px] font-normal">refresh</span>
+                  Reset
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!subtitleRows.length) return;
+                    if (!confirm(`Delete all ${subtitleRows.length} subtitle${subtitleRows.length > 1 ? "s" : ""}?`)) return;
+                    setSavingSubs(true);
+                    try {
+                      const existing = await api.get<Subtitle[]>(`/videos/${videoId}/subtitles`);
+                      await Promise.all(existing.map(s => api.delete(`/videos/${videoId}/subtitles/${s.language}`)));
+                      setSubtitleRows([]);
+                      setToast("All subtitles deleted");
+                      setTimeout(() => setToast(null), 2000);
+                      fetchSubtitles();
+                    } catch {
+                      setToast("Failed to delete subtitles");
+                      setTimeout(() => setToast(null), 2000);
+                    } finally {
+                      setSavingSubs(false);
+                    }
+                  }}
+                  disabled={savingSubs || subtitleRows.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-btn px-3.5 py-1.5 text-[12.5px] font-semibold disabled:opacity-40"
+                  style={{ background: "rgb(252, 228, 236)", color: "#a8364b" }}
+                >
+                  <span className="material-symbols-outlined text-[15px] font-normal">delete</span>
+                  Delete
+                </button>
+              </div>
             </div>
 
           </div>
