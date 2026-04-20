@@ -1623,13 +1623,21 @@ export default function SettingsPage() {
                 <button
                   key={tier}
                   onClick={() => applyTier(tier)}
-                  className="rounded-[14px] border-2 px-5 py-5 text-left transition-all"
+                  className="relative rounded-[14px] border-2 px-5 py-5 text-left transition-all"
                   style={active
                     ? { borderColor: "#5b5a8b", background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)", boxShadow: "0 4px 12px rgba(91, 90, 139, 0.08)" }
                     : { borderColor: "#e5e7eb", background: "#fff" }}
                   onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.borderColor = "#c4b5fd"; }}
                   onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e7eb"; }}
                 >
+                  {active && (
+                    <span
+                      className="absolute top-3 right-3 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-[#5b5a8b] text-white"
+                      aria-label="Selected preset"
+                    >
+                      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                    </span>
+                  )}
                   <div className="mb-3 flex items-center gap-2.5">
                     <span
                       className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full"
@@ -1674,17 +1682,30 @@ export default function SettingsPage() {
                       <span className="text-[11px] font-semibold text-on-surface-var">kbps</span>
                     </div>
                   </div>
-                  <input
-                    type="range"
-                    min={range.min}
-                    max={range.max}
-                    step={range.min >= 1000 ? 100 : 10}
-                    value={value}
-                    onChange={(e) => updateEncoding(r.key, Number(e.target.value) as never)}
-                    className="slider-purple has-fill w-full cursor-pointer"
-                    style={{ ["--fill-pct" as never]: `${((value - range.min) / (range.max - range.min)) * 100}%` }}
-                  />
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-on-surface-var">
+                  <div className="relative">
+                    <input
+                      type="range"
+                      min={range.min}
+                      max={range.max}
+                      step={range.min >= 1000 ? 100 : 10}
+                      value={value}
+                      onChange={(e) => updateEncoding(r.key, Number(e.target.value) as never)}
+                      className="slider-purple has-fill w-full cursor-pointer"
+                      style={{ ["--fill-pct" as never]: `${((value - range.min) / (range.max - range.min)) * 100}%` }}
+                    />
+                    {/* Recommended tick — shows where the default bitrate sits so the admin can orient */}
+                    {typeof range.default === "number" && range.default > range.min && range.default < range.max && (
+                      <span
+                        className="pointer-events-none absolute top-full mt-0.5 -translate-x-1/2 text-[9.5px] font-bold uppercase tracking-[.08em] text-[#6b7280] whitespace-nowrap"
+                        style={{ left: `${((range.default - range.min) / (range.max - range.min)) * 100}%` }}
+                        title={`Recommended: ${range.default} kbps`}
+                      >
+                        <span className="block h-1.5 w-0.5 mx-auto bg-[#9ca3af] mb-0.5" />
+                        Rec.
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-[11px] text-on-surface-var">
                     <span>{range.min}k</span>
                     <span>{range.max}k</span>
                   </div>
