@@ -205,7 +205,7 @@ function ThumbnailPicker({
 
   return (
     <div
-      className={`relative rounded-card bg-surface-card p-6 shadow-card transition-all ${
+      className={`relative rounded-card bg-surface-card p-4 sm:p-6 shadow-card transition-all ${
         dropActive ? "ring-2 ring-primary ring-offset-2" : ""
       }`}
       onDragEnter={handleDragEnter}
@@ -229,6 +229,13 @@ function ThumbnailPicker({
           </span>
         )}
       </div>
+
+      {/* Current thumbnail preview (when no candidates yet, e.g. before encoding finishes) */}
+      {candidates.length === 0 && currentThumbnailUrl && (
+        <div className="mb-3 aspect-video overflow-hidden rounded-md bg-surface-low">
+          <img src={currentThumbnailUrl} alt="Current thumbnail" className="h-full w-full object-cover" />
+        </div>
+      )}
 
       {/* Candidate grid */}
       {candidates.length > 0 && (
@@ -740,8 +747,8 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
       )}
 
       {/* Header */}
-      <div className="border-b border-on-surface/5 bg-surface-card px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
+      <div className="border-b border-on-surface/5 bg-surface-card px-4 sm:px-6 py-4">
+        <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
           <div>
             <button
               onClick={onBack}
@@ -749,8 +756,8 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             >
               &larr; Back to Videos
             </button>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-on-surface">{video.title}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold text-on-surface break-words">{video.title}</h1>
               <StatusBadge status={video.status} />
             </div>
           </div>
@@ -770,7 +777,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
         </div>
 
         {/* Tabs */}
-        <div className="mt-4 flex gap-1 rounded-[10px] bg-surface-low p-1 w-fit">
+        <div className="mt-4 flex gap-1 rounded-[10px] bg-surface-low p-1 w-fit max-w-full overflow-x-auto">
           {([
             { key: "overview",  label: "Overview",  icon: "visibility" },
             { key: "analytics", label: "Analytics", icon: "analytics" },
@@ -798,7 +805,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
       </div>
 
       {/* Tab content */}
-      <div className="mx-auto max-w-7xl p-6">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6">
         {activeTab === "overview" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* ================================================================ */}
@@ -806,14 +813,40 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
           {/* ================================================================ */}
           <div className="space-y-6 lg:col-span-2">
             {/* Video player */}
-            <div className="aspect-video overflow-hidden rounded-card bg-black">
-              <iframe
-                src={`/v/${videoId}`}
-                className="h-full w-full"
-                allowFullScreen
-                allow="autoplay"
-                frameBorder="0"
-              />
+            <div className="aspect-video overflow-hidden rounded-card bg-black relative">
+              {video.hls_ready ? (
+                <iframe
+                  src={`/v/${videoId}`}
+                  className="h-full w-full"
+                  allowFullScreen
+                  allow="autoplay"
+                  frameBorder="0"
+                />
+              ) : (
+                <div
+                  className="h-full w-full flex flex-col items-center justify-center text-white/80 text-center px-6"
+                  style={{
+                    background: video.thumbnail_url
+                      ? `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(${video.thumbnail_url}) center/cover`
+                      : "linear-gradient(135deg, #1a1a2e, #16213e)",
+                  }}
+                >
+                  <span className="material-symbols-outlined text-[48px] font-normal opacity-80 mb-2">
+                    {video.status === "error" ? "error" : video.status === "processing" || video.status === "uploading" ? "sync" : "play_circle"}
+                  </span>
+                  <div className="text-[14px] font-semibold">
+                    {video.status === "error" ? "Encoding failed"
+                      : video.status === "processing" ? "Processing — this may take a few minutes"
+                      : video.status === "uploading" ? "Uploading…"
+                      : "Player will be available once encoding finishes"}
+                  </div>
+                  <div className="text-[11.5px] opacity-70 mt-1 max-w-md">
+                    {video.status === "ready"
+                      ? "HLS segments not yet generated for this video."
+                      : "We'll automatically refresh once it's ready."}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* File info strip — horizontal 3-col (File size · Duration · Uploaded) */}
@@ -835,7 +868,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             </div>
 
             {/* Chapters */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="text-base font-semibold text-on-surface">Chapters</h2>
                 <div className="flex items-center gap-2">
@@ -897,7 +930,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             </div>
 
             {/* Subtitles */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-2 text-base font-semibold text-on-surface">Subtitles</h2>
               <p className="mb-3 text-xs text-on-surface-var">Only vtt, srt, ass, sub and zip/rar/7z file types are supported.</p>
 
@@ -1037,7 +1070,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             {(() => {
               const dirty = !!video && (title !== (video.title ?? "") || description !== (video.description ?? ""));
               return (
-                <div className="rounded-card bg-surface-card p-6 shadow-card">
+                <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
                   <h2 className="mb-4 text-base font-semibold text-on-surface">Edit Details</h2>
                   <div className="space-y-4">
                     <div>
@@ -1091,7 +1124,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             />
 
             {/* Embed Code */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-on-surface">Embed Code</h2>
                 <button
@@ -1102,7 +1135,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                   Customize
                 </button>
               </div>
-              <pre className="overflow-x-auto rounded-btn bg-surface-low p-3 font-mono text-[11.5px] leading-relaxed text-on-surface">
+              <pre className="rounded-btn bg-surface-low p-3 font-mono text-[11.5px] leading-relaxed text-on-surface whitespace-pre-wrap break-all">
                 {embedCode}
               </pre>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1169,7 +1202,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 </div>
 
                 {/* Views chart (last 30 days) */}
-                <div className="rounded-card bg-surface-card p-6 shadow-card">
+                <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
                   <h2 className="mb-4 text-base font-semibold text-on-surface">
                     Views &mdash; Last 30 Days
                   </h2>
@@ -1200,7 +1233,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 </div>
 
                 {/* Top Countries */}
-                <div className="rounded-card bg-surface-card p-6 shadow-card">
+                <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
                   <h2 className="mb-4 text-base font-semibold text-on-surface">Top Countries</h2>
                   <div className="space-y-3">
                     {analytics.top_countries.map((c) => {
@@ -1226,7 +1259,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 </div>
 
                 {/* Device Breakdown */}
-                <div className="rounded-card bg-surface-card p-6 shadow-card">
+                <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
                   <h2 className="mb-4 text-base font-semibold text-on-surface">Device Breakdown</h2>
                   <div className="space-y-3">
                     {analytics.top_devices.map((d) => {
@@ -1262,7 +1295,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
         {activeTab === "settings" && (
           <div className="space-y-6 max-w-3xl">
             {/* Visibility + Tags */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-4 text-base font-semibold text-on-surface">Visibility &amp; Tags</h2>
               <div className="space-y-4">
                 <div>
@@ -1299,7 +1332,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             </div>
 
             {/* Scheduled Publishing */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-1 text-base font-semibold text-on-surface">Scheduled Publishing</h2>
               <p className="mb-4 text-xs text-on-surface-var">Video will go live at this time. Leave blank to publish immediately.</p>
               <input
@@ -1311,7 +1344,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             </div>
 
             {/* Geo-restriction */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-1 text-base font-semibold text-on-surface">Geo-restriction</h2>
               <p className="mb-4 text-xs text-on-surface-var">Restrict playback by viewer country (ISO 3166-1 alpha-2 codes, e.g. US, GB, DE).</p>
               <div className="space-y-4">
@@ -1343,7 +1376,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             </div>
 
             {/* Allowed Domains (hotlink) */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-1 text-base font-semibold text-on-surface">Allowed Domains</h2>
               <p className="mb-4 text-xs text-on-surface-var">Restrict embeds to specific domains. Leave blank to allow all.</p>
               <input
@@ -1356,7 +1389,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
             </div>
 
             {/* Encryption */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-1 text-base font-semibold text-on-surface">Encryption</h2>
               <p className="mb-4 text-xs text-on-surface-var">Rotate the AES key used for HLS segment encryption. Clients currently playing may need to reload.</p>
               <button
@@ -1384,7 +1417,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
 
         {activeTab === "embed" && (
           <div className="space-y-6 max-w-3xl">
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-1 text-base font-semibold text-on-surface">Embed Code</h2>
               <p className="mb-4 text-xs text-on-surface-var">Copy and paste this snippet into any HTML page.</p>
               <pre className="overflow-x-auto rounded-btn bg-surface-low p-4 font-mono text-[12px] leading-relaxed text-on-surface">
@@ -1414,7 +1447,7 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
               </div>
             </div>
 
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
+            <div className="rounded-card bg-surface-card p-4 sm:p-6 shadow-card">
               <h2 className="mb-1 text-base font-semibold text-on-surface">Direct URLs</h2>
               <p className="mb-4 text-xs text-on-surface-var">Share these URLs directly or integrate with your own player.</p>
               <div className="space-y-3">

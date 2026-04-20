@@ -87,7 +87,7 @@ async function ensureDemoVideos() {
     const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
     await db.query(
       `INSERT INTO videos (id, title, description, file_size, duration, status, storage_type, visibility, views_count, hls_ready, qualities, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 'local', 'public', $7, TRUE, '[]'::jsonb, $8, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'local', 'public', $7, FALSE, '[]'::jsonb, $8, $8)`,
       [
         id,
         DEMO_PREFIX + v.title,
