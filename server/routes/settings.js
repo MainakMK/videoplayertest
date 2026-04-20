@@ -1001,7 +1001,10 @@ router.put('/email', async (req, res) => {
   }
 });
 
-// POST /email/test — send a test email
+// POST /email/test — send a test email.
+// Body may carry override SMTP creds so the admin can test BEFORE saving:
+//   { to, smtp_host?, smtp_port?, smtp_user?, smtp_pass?, smtp_secure?, smtp_from?, smtp_from_name? }
+// Any provided field beats the saved value; missing fields fall back to the DB.
 router.post('/email/test', async (req, res) => {
   try {
     const { sendEmailDetailed } = require('../services/email');
@@ -1011,6 +1014,18 @@ router.post('/email/test', async (req, res) => {
     if (!toEmail || !toEmail.includes('@')) {
       return res.status(400).json({ error: 'No valid email address to send test to. Enter an email in the test field.', success: false });
     }
+
+    // Pick up only the SMTP_* fields from the body — ignore any other keys the caller might include
+    const override = {};
+    for (const key of ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_from_name']) {
+      if (req.body[key] !== undefined && req.body[key] !== '' && req.body[key] !== '••••••••') {
+        override[key] = String(req.body[key]);
+      }
+    }
+    if (req.body.smtp_secure !== undefined) {
+      override.smtp_secure = (req.body.smtp_secure === true || req.body.smtp_secure === 'true') ? 'true' : 'false';
+    }
+    const hasOverride = Object.keys(override).length > 0;
 
     const html = `
       <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f7f9fb;border-radius:16px">
@@ -1027,7 +1042,7 @@ router.post('/email/test', async (req, res) => {
       </div>
     `;
 
-    const result = await sendEmailDetailed(toEmail, 'The Archive — Test Email', html);
+    const result = await sendEmailDetailed(toEmail, 'The Archive — Test Email', html, hasOverride ? override : null);
 
     // Save last test timestamp regardless of outcome
     await db.query(

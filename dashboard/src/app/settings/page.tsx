@@ -1323,7 +1323,6 @@ export default function SettingsPage() {
   const PROVIDER_DEFAULTS: Record<string, { host: string; port: string; secure: string; hint: string }> = {
     ses:       { host: "email-smtp.us-east-1.amazonaws.com", port: "587", secure: "false", hint: "Use IAM SMTP credentials from AWS SES. Ensure your domain + region are verified." },
     gmail:     { host: "smtp.gmail.com",                     port: "587", secure: "false", hint: "Use an App Password from your Google Account (2FA must be enabled)." },
-    outlook:   { host: "smtp.office365.com",                 port: "587", secure: "false", hint: "Works with Microsoft 365 accounts. SMTP AUTH must be enabled." },
     mailgun:   { host: "smtp.mailgun.org",                   port: "587", secure: "false", hint: "Use your Mailgun SMTP credentials from the domain sending settings." },
     sendgrid:  { host: "smtp.sendgrid.net",                  port: "587", secure: "false", hint: "User is literally \"apikey\", password is your SG API key." },
     postmark:  { host: "smtp.postmarkapp.com",               port: "587", secure: "false", hint: "Use your Server API token as both username and password." },
@@ -1374,7 +1373,21 @@ export default function SettingsPage() {
     if (!to.includes("@")) { toast("Enter a valid email address", "error"); return; }
     setEmailTesting(true);
     try {
-      await api.post("/settings/email/test", { to });
+      // Send current (possibly unsaved) form values as override — lets the admin verify
+      // creds before committing them. Masked password sentinel is skipped server-side.
+      const body: Record<string, unknown> = {
+        to,
+        smtp_host: emailCfg.smtp_host,
+        smtp_port: emailCfg.smtp_port,
+        smtp_user: emailCfg.smtp_user,
+        smtp_secure: emailCfg.smtp_secure,
+        smtp_from: emailCfg.smtp_from,
+        smtp_from_name: emailCfg.smtp_from_name,
+      };
+      if (emailCfg.smtp_pass && emailCfg.smtp_pass !== "••••••••") {
+        body.smtp_pass = emailCfg.smtp_pass;
+      }
+      await api.post("/settings/email/test", body);
       toast(`Test email sent to ${to}`, "success");
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -1415,18 +1428,74 @@ export default function SettingsPage() {
         <div className={sectionCard}>
           <h3 className="mb-1 text-[15px] font-bold text-on-surface">Email Provider</h3>
           <p className="mb-5 text-[12px] text-on-surface-var">Pick a preset to auto-fill the host and port — or choose Custom for any SMTP server.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-            {(["ses","gmail","outlook","mailgun","sendgrid","postmark","custom"] as const).map(p => {
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
+            {(["ses","gmail","mailgun","sendgrid","postmark","custom"] as const).map(p => {
               const active = cfg.smtp_provider === p;
-              // Per-provider monogram + brand color — inline so we don't depend on an icon set
-              const brand: Record<string, { label: string; mono: string; bg: string; fg: string }> = {
-                ses:      { label: "AWS SES",  mono: "AWS", bg: "#FFF4E5", fg: "#FF9900" },
-                gmail:    { label: "Gmail",    mono: "G",   bg: "#FDECEA", fg: "#EA4335" },
-                outlook:  { label: "Outlook",  mono: "O",   bg: "#E8F1FB", fg: "#0078D4" },
-                mailgun:  { label: "Mailgun",  mono: "M",   bg: "#FEE2E2", fg: "#F06B66" },
-                sendgrid: { label: "SendGrid", mono: "SG",  bg: "#E0F2FE", fg: "#1A82E2" },
-                postmark: { label: "Postmark", mono: "P",   bg: "#FFF7E0", fg: "#FFDE00" },
-                custom:   { label: "Custom",   mono: "⚙",   bg: "#F3F4F6", fg: "#6B7280" },
+              // Real inline brand SVGs (MIT-style simple-icons paths) — no network dep
+              const brand: Record<string, { label: string; logo: React.ReactNode }> = {
+                ses: {
+                  label: "AWS SES",
+                  logo: (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                      <path fill="#FF9900" d="M13.527 16.002c-.43 0-.82.08-1.17.24-.35.16-.65.38-.89.67-.24.29-.43.64-.56 1.04-.13.4-.2.84-.2 1.31 0 .46.07.9.2 1.3.13.4.32.76.56 1.05.24.29.54.51.89.67.35.16.74.24 1.17.24.47 0 .9-.09 1.28-.26.38-.17.7-.41.95-.71.25-.3.45-.66.58-1.08.13-.42.2-.87.2-1.35 0-.45-.07-.87-.2-1.27-.13-.4-.33-.75-.58-1.04-.25-.29-.57-.52-.95-.69-.38-.17-.81-.26-1.28-.26zM6.028 8.002l8.7 3.95v-2.2L9.378 7.4l5.35-2.3v-2.2L6.03 6.8v1.2zm11.95-5.9l-8.7 3.95v2.2l5.35-2.35-5.35 2.35v2.2l8.7-3.95v-4.4zm.55 16.45c-.2.45-.5.85-.9 1.2-.4.35-.86.64-1.38.85-.52.21-1.07.32-1.65.32-.58 0-1.12-.11-1.62-.32-.5-.21-.94-.51-1.32-.89-.38-.38-.67-.83-.88-1.33-.21-.5-.31-1.03-.31-1.6 0-.56.1-1.09.31-1.59.21-.5.5-.94.88-1.32.38-.38.82-.68 1.32-.89.5-.21 1.04-.32 1.62-.32.58 0 1.13.11 1.65.32.52.21.98.5 1.38.85.4.35.7.75.9 1.2.2.45.3.93.3 1.45 0 .52-.1 1-.3 1.45z"/>
+                    </svg>
+                  ),
+                },
+                gmail: {
+                  label: "Gmail",
+                  logo: (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                      <path fill="#4285F4" d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                      <path fill="#34A853" d="M1.636 5.457 12 13.185l10.364-7.728V19.366c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457z" opacity="0"/>
+                      <path fill="#EA4335" d="M5.455 20.999H1.636A1.636 1.636 0 0 1 0 19.365V5.457l5.455 4.091z"/>
+                      <path fill="#FBBC04" d="M22.364 21h-3.819V11.73L24 7.64v11.726c0 .904-.732 1.636-1.636 1.636z"/>
+                      <path fill="#C5221F" d="m0 5.457 5.455 4.091V20.999L0 19.366zM24 5.457 18.545 9.548v11.453L24 19.366z" opacity="0"/>
+                    </svg>
+                  ),
+                },
+                mailgun: {
+                  label: "Mailgun",
+                  logo: (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                      <circle cx="12" cy="12" r="10" fill="#F0525B"/>
+                      <circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff" strokeWidth="1.6"/>
+                      <circle cx="12" cy="12" r="2" fill="#fff"/>
+                      <circle cx="17.2" cy="12" r="1.6" fill="#F0525B" stroke="#fff" strokeWidth="1.6"/>
+                    </svg>
+                  ),
+                },
+                sendgrid: {
+                  label: "SendGrid",
+                  logo: (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                      <rect x="2" y="2"  width="7" height="7" fill="#99E1F4"/>
+                      <rect x="9" y="2"  width="7" height="7" fill="#1A82E2"/>
+                      <rect x="2" y="9"  width="7" height="7" fill="#1A82E2"/>
+                      <rect x="9" y="9"  width="7" height="7" fill="#99E1F4"/>
+                      <rect x="9" y="16" width="7" height="7" fill="#1A82E2"/>
+                      <rect x="16" y="9"  width="7" height="7" fill="#99E1F4"/>
+                      <rect x="16" y="2"  width="7" height="7" fill="#1A82E2"/>
+                    </svg>
+                  ),
+                },
+                postmark: {
+                  label: "Postmark",
+                  logo: (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                      <path fill="#FFDE00" d="M12 2 2 7v5c0 5.5 4 9.74 10 10 6-.26 10-4.5 10-10V7z"/>
+                      <path fill="#1D1D1D" d="m7.5 10 4 3.5 5-5.5-1.2-1-3.8 4.2-2.8-2.4z"/>
+                    </svg>
+                  ),
+                },
+                custom: {
+                  label: "Custom",
+                  logo: (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                      <circle cx="12" cy="12" r="11" fill="#E5E7EB"/>
+                      <path fill="#6B7280" d="M19.43 12.98c.04-.32.07-.66.07-1 0-.34-.03-.67-.07-1l2.11-1.63a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.3 7.3 0 0 0-1.74-1L14.5 2.5a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5l-.39 2.53a7.3 7.3 0 0 0-1.74 1l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.63a7.5 7.5 0 0 0 0 2l-2.11 1.63a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1a7.3 7.3 0 0 0 1.74 1l.39 2.53a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5l.39-2.53a7.3 7.3 0 0 0 1.74-1l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/>
+                    </svg>
+                  ),
+                },
               };
               const b = brand[p];
               return (
@@ -1440,11 +1509,8 @@ export default function SettingsPage() {
                     boxShadow: active ? "0 0 0 3px rgba(91,90,139,0.08)" : "none",
                   }}
                 >
-                  <span
-                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[6px] text-[10px] font-extrabold tabular-nums"
-                    style={{ backgroundColor: b.bg, color: b.fg }}
-                  >
-                    {b.mono}
+                  <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] bg-white ring-1 ring-black/5">
+                    {b.logo}
                   </span>
                   <span className="text-[12.5px] font-semibold" style={{ color: active ? "#5b5a8b" : "rgb(var(--on-surface-rgb))" }}>{b.label}</span>
                   {active && (
@@ -1500,8 +1566,16 @@ export default function SettingsPage() {
 
         {/* Test email card */}
         <div className={sectionCard}>
-          <h3 className="mb-1 text-[15px] font-bold text-on-surface">Send Test Email</h3>
-          <p className="mb-4 text-[12px] text-on-surface-var">Send a test message to verify credentials work end-to-end.</p>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-[15px] font-bold text-on-surface">Send Test Email</h3>
+              <p className="mt-0.5 text-[12px] text-on-surface-var">Tests the credentials currently in the form — you don't need to save first.</p>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[10.5px] font-bold text-[#047857]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#10b981]" />
+              No save required
+            </span>
+          </div>
           <div className="flex gap-2 flex-wrap items-end">
             <div className="flex-1 min-w-[240px]">
               <TextField

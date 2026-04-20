@@ -33,18 +33,24 @@ async function sendEmail(to, subject, html) {
 /**
  * Send an email and return { success, error } for callers that need the error message
  * (e.g., the Send Test Email button).
+ *
+ * `overrideConfig` lets the caller test SMTP creds BEFORE saving them. When provided,
+ * its fields (smtp_host/port/user/pass/secure/from/from_name) take precedence over
+ * whatever is in the DB. Missing fields fall back to the saved values so callers only
+ * need to supply the parts they've edited.
  */
-async function sendEmailDetailed(to, subject, html) {
+async function sendEmailDetailed(to, subject, html, overrideConfig = null) {
   try {
-    const config = await getSmtpConfig();
+    const saved = await getSmtpConfig();
+    const config = overrideConfig ? { ...saved, ...overrideConfig } : saved;
 
     if (!config.smtp_host || !config.smtp_user) {
       console.log('[Email] SMTP not configured — skipping email to', to);
-      return { success: false, error: 'SMTP is not configured. Save your SMTP settings first.' };
+      return { success: false, error: 'SMTP host/user is missing. Fill them in and try again.' };
     }
 
     if (!config.smtp_pass) {
-      return { success: false, error: 'SMTP password is empty. Enter your password and save settings first.' };
+      return { success: false, error: 'SMTP password is empty. Fill it in and try again.' };
     }
 
     const fromAddr = config.smtp_from || config.smtp_user;
