@@ -57,7 +57,7 @@ export default function DashboardLayout({
 
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-4 px-9 shadow-[0_1px_0_rgba(44,52,55,0.06)] backdrop-blur-[20px]" style={{ background: "rgba(247,249,251,.88)" }}>
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 px-4 sm:gap-4 sm:px-9 shadow-[0_1px_0_rgba(44,52,55,0.06)] backdrop-blur-[20px]" style={{ background: "rgba(247,249,251,.88)" }}>
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-on-surface-var hover:text-on-surface lg:hidden"
@@ -100,7 +100,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto px-9 py-7">
+        <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-9 sm:py-7">
           <div className="animate-fadeUp">{children}</div>
         </main>
       </div>

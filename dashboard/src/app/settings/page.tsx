@@ -881,15 +881,15 @@ export default function SettingsPage() {
 
     const KpiCard = ({ label, value, unit, sub, accent }: { label: string; value: string; unit?: string; sub?: string; accent: string }) => (
       <div
-        className="rounded-[12px] bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px]"
+        className="rounded-[12px] bg-white px-3 py-3 sm:px-5 sm:py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px] min-w-0"
         style={{ borderLeftColor: accent }}
       >
-        <div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
-        <div className="mt-2 flex items-baseline gap-1.5">
-          <span className="text-[24px] font-extrabold leading-none tracking-[-0.6px] text-[#1e1e2f] tabular-nums">{value}</span>
-          {unit && <span className="text-[12px] font-semibold text-[#9ca3af]">{unit}</span>}
+        <div className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
+        <div className="mt-1.5 sm:mt-2 flex items-baseline gap-1">
+          <span className="text-[18px] sm:text-[24px] font-extrabold leading-none tracking-[-0.6px] text-[#1e1e2f] tabular-nums">{value}</span>
+          {unit && <span className="text-[11px] sm:text-[12px] font-semibold text-[#9ca3af]">{unit}</span>}
         </div>
-        {sub && <div className="mt-2 text-[12px] text-[#6b7280]">{sub}</div>}
+        {sub && <div className="mt-1.5 sm:mt-2 text-[11px] sm:text-[12px] text-[#6b7280] break-words">{sub}</div>}
       </div>
     );
 
@@ -952,11 +952,11 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="mt-8 flex items-center justify-between">
-            <button onClick={testStorageConnection} disabled={storageTesting || !r2HasAllCreds} className="rounded-[10px] border border-primary/25 bg-white px-5 py-2.5 text-[13px] font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-50">
+          <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button onClick={testStorageConnection} disabled={storageTesting || !r2HasAllCreds} className="rounded-[10px] border border-primary/25 bg-white px-5 py-2.5 text-[13px] font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-50 w-full sm:w-auto">
               {storageTesting ? "Testing..." : "Test Connection"}
             </button>
-            <button onClick={saveStorage} disabled={storageSaving} className={btnPrimary}>
+            <button onClick={saveStorage} disabled={storageSaving} className={`${btnPrimary} w-full sm:w-auto`}>
               {storageSaving ? "Saving..." : "Save Storage Settings"}
             </button>
           </div>
@@ -1012,10 +1012,10 @@ export default function SettingsPage() {
     const DomainKpi = ({ label, value, sub, tone, accent }: { label: string; value: string; sub: string; tone: "ok" | "warn" | "unset"; accent: string }) => {
       const s = toneStyles[tone];
       return (
-        <div className="rounded-[12px] bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px]" style={{ borderLeftColor: accent }}>
-          <div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
-          <div className="mt-1.5 text-[15px] font-bold text-[#1e1e2f] truncate">{value || "—"}</div>
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ backgroundColor: s.bg, color: s.fg }}>
+        <div className="rounded-[12px] bg-white px-3 py-3 sm:px-5 sm:py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px] min-w-0" style={{ borderLeftColor: accent }}>
+          <div className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
+          <div className="mt-1.5 text-[13px] sm:text-[15px] font-bold text-[#1e1e2f] truncate">{value || "—"}</div>
+          <div className="mt-1.5 sm:mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] sm:text-[10.5px] font-bold" style={{ backgroundColor: s.bg, color: s.fg }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.dot }} />
             {sub}
           </div>
@@ -1061,8 +1061,8 @@ export default function SettingsPage() {
               <TextField label="" value={playerDomain} onChange={setPlayerDomain} placeholder="play.example.com" />
             </div>
           </div>
-          <div className="mt-6 flex justify-end">
-            <button onClick={saveDomains} disabled={domainsSaving} className={btnPrimary}>
+          <div className="mt-6 flex flex-col sm:flex-row justify-end">
+            <button onClick={saveDomains} disabled={domainsSaving} className={`${btnPrimary} w-full sm:w-auto`}>
               {domainsSaving ? "Saving..." : "Save Domain Settings"}
             </button>
           </div>
@@ -1310,8 +1310,8 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div className="mt-8 flex justify-end">
-            <button onClick={saveSecurity} disabled={securitySaving} className={btnPrimary}>
+          <div className="mt-8 flex flex-col sm:flex-row justify-end">
+            <button onClick={saveSecurity} disabled={securitySaving} className={`${btnPrimary} w-full sm:w-auto`}>
               {securitySaving ? "Saving..." : "Save Security Settings"}
             </button>
           </div>
@@ -1732,8 +1732,8 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="mt-8 flex justify-end">
-            <button onClick={changePassword} disabled={accountSaving || pwMismatch} className={btnPrimary}>
+          <div className="mt-8 flex flex-col sm:flex-row justify-end">
+            <button onClick={changePassword} disabled={accountSaving || pwMismatch} className={`${btnPrimary} w-full sm:w-auto`}>
               {accountSaving ? "Saving..." : "Save Account Settings"}
             </button>
           </div>
@@ -2518,10 +2518,10 @@ export default function SettingsPage() {
       const toneFg = tone === "ok" ? "#047857" : tone === "warn" ? "#b45309" : "#6b7280";
       const toneDot = tone === "ok" ? "#10b981" : tone === "warn" ? "#f59e0b" : "#9ca3af";
       return (
-        <div className="rounded-[12px] bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px]" style={{ borderLeftColor: accent }}>
-          <div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
-          <div className="mt-1.5 text-[18px] font-extrabold tracking-[-0.3px] text-[#1e1e2f] tabular-nums">{value}</div>
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ backgroundColor: toneBg, color: toneFg }}>
+        <div className="rounded-[12px] bg-white px-3 py-3 sm:px-5 sm:py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px] min-w-0" style={{ borderLeftColor: accent }}>
+          <div className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
+          <div className="mt-1.5 text-[16px] sm:text-[18px] font-extrabold tracking-[-0.3px] text-[#1e1e2f] tabular-nums">{value}</div>
+          <div className="mt-1.5 sm:mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] sm:text-[10.5px] font-bold" style={{ backgroundColor: toneBg, color: toneFg }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: toneDot }} />
             {sub}
           </div>
@@ -2640,9 +2640,9 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="mt-8 flex justify-end gap-3">
-                <button onClick={resetAds} className="rounded-[10px] border border-[#e5e7eb] bg-white px-6 py-2.5 text-[13px] font-semibold text-[#6b7280] transition hover:bg-[#f9fafb]">Reset</button>
-                <button onClick={saveAds} disabled={adsSaving} className={btnPrimary}>{adsSaving ? "Saving..." : "Save"}</button>
+              <div className="mt-8 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                <button onClick={resetAds} className="rounded-[10px] border border-[#e5e7eb] bg-white px-6 py-2.5 text-[13px] font-semibold text-[#6b7280] transition hover:bg-[#f9fafb] w-full sm:w-auto">Reset</button>
+                <button onClick={saveAds} disabled={adsSaving} className={`${btnPrimary} w-full sm:w-auto`}>{adsSaving ? "Saving..." : "Save"}</button>
               </div>
             </div>
           )}
@@ -2671,9 +2671,9 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="mt-8 flex justify-end gap-3">
-                <button onClick={resetAds} className="rounded-[10px] border border-[#e5e7eb] bg-white px-6 py-2.5 text-[13px] font-semibold text-[#6b7280] transition hover:bg-[#f9fafb]">Reset</button>
-                <button onClick={saveAds} disabled={adsSaving} className={btnPrimary}>{adsSaving ? "Saving..." : "Save"}</button>
+              <div className="mt-8 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                <button onClick={resetAds} className="rounded-[10px] border border-[#e5e7eb] bg-white px-6 py-2.5 text-[13px] font-semibold text-[#6b7280] transition hover:bg-[#f9fafb] w-full sm:w-auto">Reset</button>
+                <button onClick={saveAds} disabled={adsSaving} className={`${btnPrimary} w-full sm:w-auto`}>{adsSaving ? "Saving..." : "Save"}</button>
               </div>
             </div>
           )}
