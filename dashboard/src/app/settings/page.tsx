@@ -189,7 +189,7 @@ function TextField({
 // Tabs
 // ---------------------------------------------------------------------------
 
-const TABS = ["Storage", "Email", "Team", "Player", "Encoding", "Domains", "Security", "Ads", "Account"] as const;
+const TABS = ["Storage", "Encoding", "Player", "Domains", "Ads", "Email", "Security", "Team", "Account"] as const;
 type Tab = (typeof TABS)[number];
 
 interface EncodingConfig {
@@ -845,7 +845,7 @@ export default function SettingsPage() {
     return (
       <>
         {/* Storage Usage */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
           <h3 className="mb-5 text-[15px] font-bold text-on-surface">Storage Usage</h3>
 
           <div className="grid grid-cols-2 gap-4 mb-7">
@@ -883,7 +883,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Cloudflare R2 Configuration */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="mb-7 flex items-center gap-3">
             <div className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] bg-[#f38020]">
               <span className="text-[12px] text-white font-bold">R</span>
@@ -940,7 +940,7 @@ export default function SettingsPage() {
     return (
       <>
         {/* Domain Settings */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
           <h3 className="mb-6 text-[15px] font-bold text-[#1e1e2f]">Domain Settings</h3>
           <div className="flex flex-col gap-5">
             <TextField label="Dashboard Domain" value={dashboardDomain} onChange={setDashboardDomain} placeholder="dash.example.com" />
@@ -954,7 +954,7 @@ export default function SettingsPage() {
         </div>
 
         {/* CDN Domains */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="text-[15px] font-bold text-[#1e1e2f]">CDN Domains</h3>
@@ -1085,18 +1085,7 @@ export default function SettingsPage() {
     ];
 
     return (
-      <div className="space-y-6">
-        {/* Two-factor authentication (per-admin) */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-          <div className="mb-4">
-            <h3 className="text-[15px] font-bold text-[#1e1e2f]">Two-Factor Authentication</h3>
-            <p className="mt-1 text-[12px] text-on-surface-var">Require a 6-digit code from your authenticator app in addition to your password when signing in.</p>
-          </div>
-          <TwoFactorCard onToast={(msg, tone) => toast(msg, tone ?? "success")} />
-        </div>
-
-        {/* App-wide security toggles */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+      <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <h3 className="mb-2 text-[15px] font-bold text-[#1e1e2f]">Security Settings</h3>
 
         <div className="flex flex-col">
@@ -1143,7 +1132,6 @@ export default function SettingsPage() {
           <button onClick={saveSecurity} disabled={securitySaving} className={btnPrimary}>
             {securitySaving ? "Saving..." : "Save Security Settings"}
           </button>
-        </div>
         </div>
       </div>
     );
@@ -1354,9 +1342,9 @@ export default function SettingsPage() {
 
   function renderAccount() {
     return (
-      <>
+      <div className="space-y-6">
         {/* Account Settings */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <h3 className="mb-6 text-[15px] font-bold text-[#1e1e2f]">Account Settings</h3>
           <div className="flex flex-col gap-5">
             <TextField label="Email" value={email} readOnly />
@@ -1364,8 +1352,17 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Two-factor authentication (per-admin, so it lives under the admin's Account) */}
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <div className="mb-4">
+            <h3 className="text-[15px] font-bold text-[#1e1e2f]">Two-Factor Authentication</h3>
+            <p className="mt-1 text-[12px] text-on-surface-var">Add a 6-digit code from your authenticator app to your sign-in — protects your own account.</p>
+          </div>
+          <TwoFactorCard onToast={(msg, tone) => toast(msg, tone ?? "success")} />
+        </div>
+
         {/* Change Password */}
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <h3 className="mb-6 text-[15px] font-bold text-[#1e1e2f]">Change Password</h3>
           <div className="flex flex-col gap-5">
             <PasswordField label="Current Password" value={currentPassword} onChange={setCurrentPassword} placeholder="Enter current password" />
@@ -1379,7 +1376,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -1397,7 +1394,7 @@ export default function SettingsPage() {
     const presetColors = ["#00aaff", "#ff5733", "#28a745", "#6f42c1", "#fd7e14", "#e83e8c", "#20c997", "#343a40"];
 
     return (
-      <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+      <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <h3 className="mb-2 text-[15px] font-bold text-[#1e1e2f]">Player Configuration</h3>
 
         <div className="flex flex-col">
@@ -2043,7 +2040,7 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        <div className="rounded-[16px] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           {/* VAST / VPAID */}
           {adsSubTab === "vast" && (
             <div>
@@ -2218,21 +2215,39 @@ export default function SettingsPage() {
             <p className="mt-0.5 text-[13px] text-on-surface-var">Manage your archive configuration</p>
           </div>
 
-          {/* Tabs */}
-          <div className="mb-8 flex rounded-[10px] border border-on-surface/10 bg-white overflow-hidden">
-            {TABS.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-3 text-center text-[13px] font-medium transition-all ${
-                  activeTab === tab
-                    ? "bg-white text-on-surface font-bold border border-on-surface/15 rounded-[10px] -m-px shadow-sm z-10"
-                    : "text-on-surface-var hover:text-on-surface"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+          {/* Tabs — mobile dropdown + desktop horizontal strip */}
+          <div className="mb-6 sm:hidden">
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as Tab)}
+              className="w-full rounded-[10px] border border-on-surface/15 bg-white px-4 py-3 text-[14px] font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/25"
+            >
+              {TABS.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
+            </select>
+          </div>
+          <div
+            className="hidden sm:flex mb-8 gap-1 rounded-[10px] border border-on-surface/10 bg-white p-1 overflow-x-auto"
+            style={{ scrollbarWidth: "thin" }}
+          >
+            {TABS.map((tab) => {
+              const active = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className="shrink-0 px-4 py-2 text-[13px] font-semibold rounded-[8px] transition-all whitespace-nowrap"
+                  style={
+                    active
+                      ? { background: "rgb(var(--surface-low-rgb))", color: "rgb(var(--on-surface-rgb))", boxShadow: "inset 0 0 0 1px rgba(91,90,139,0.25)" }
+                      : { background: "transparent", color: "rgb(var(--on-surface-var-rgb))" }
+                  }
+                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.color = "rgb(var(--on-surface-rgb))"; }}
+                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.color = "rgb(var(--on-surface-var-rgb))"; }}
+                >
+                  {tab}
+                </button>
+              );
+            })}
           </div>
 
           {/* Tab content */}
