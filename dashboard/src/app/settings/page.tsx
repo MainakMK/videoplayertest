@@ -1434,54 +1434,84 @@ export default function SettingsPage() {
   const [responsiveEmbed, setResponsiveEmbed] = useState(true);
 
   function renderPlayer() {
-    const playerItems = [
-      { label: "Autoplay", desc: "Auto-start video on page load", enabled: embedAutoplay, toggle: () => setEmbedAutoplay(!embedAutoplay) },
-      { label: "Loop", desc: "Repeat video when finished", enabled: embedLoop, toggle: () => setEmbedLoop(!embedLoop) },
-      { label: "Show Controls", desc: "Display player control bar", enabled: embedControls, toggle: () => setEmbedControls(!embedControls) },
-      { label: "Responsive Embed", desc: "Auto-resize to container width", enabled: responsiveEmbed, toggle: () => setResponsiveEmbed(!responsiveEmbed) },
-    ];
-
     const presetColors = ["#00aaff", "#ff5733", "#28a745", "#6f42c1", "#fd7e14", "#e83e8c", "#20c997", "#343a40"];
 
-    return (
-      <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-        <h3 className="mb-2 text-[15px] font-bold text-[#1e1e2f]">Player Configuration</h3>
+    // Contrast ratio vs the dark player background (#0f0f10) — rough WCAG AA check
+    const hexToRgb = (h: string) => {
+      const m = /^#([0-9a-f]{6})$/i.exec(h);
+      if (!m) return { r: 0, g: 170, b: 255 };
+      const n = parseInt(m[1], 16);
+      return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+    };
+    const relLum = (h: string) => {
+      const { r, g, b } = hexToRgb(h);
+      const c = [r, g, b].map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    const contrastVsDark = (() => {
+      const l1 = relLum(playerColor);
+      const l2 = relLum("#0f0f10");
+      const hi = Math.max(l1, l2), lo = Math.min(l1, l2);
+      return (hi + 0.05) / (lo + 0.05);
+    })();
+    const aaPass = contrastVsDark >= 4.5;
 
-        <div className="flex flex-col">
-          {playerItems.map((item, i) => (
-            <div key={item.label} className={`flex items-center justify-between py-5 ${i < playerItems.length - 1 ? "border-b border-[#f0f0f5]" : ""}`}>
-              <div>
-                <span className="text-[14px] font-semibold text-[#1e1e2f]">{item.label}</span>
-                <p className="mt-1 text-[12px] text-[#9ca3af]">{item.desc}</p>
-              </div>
-              <Toggle enabled={item.enabled} onChange={item.toggle} />
-            </div>
-          ))}
+    // Embed snippet mirrors current settings
+    const embedAttrs: string[] = [];
+    if (embedAutoplay) embedAttrs.push("autoplay");
+    if (embedLoop) embedAttrs.push("loop");
+    if (!embedControls) embedAttrs.push("controls=0");
+    const queryString = embedAttrs.length ? `?${embedAttrs.join("&")}` : "";
+    const embedCode = responsiveEmbed
+      ? `<div style="position:relative;padding-top:56.25%"><iframe src="https://example.com/embed/VIDEO_ID${queryString}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`
+      : `<iframe src="https://example.com/embed/VIDEO_ID${queryString}" width="640" height="360" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+
+    const ToggleRow = ({ label, desc, enabled, onToggle }: { label: string; desc: string; enabled: boolean; onToggle: () => void }) => (
+      <div className="flex items-center justify-between gap-4 py-3.5">
+        <div>
+          <div className="text-[13px] font-semibold text-[#1e1e2f]">{label}</div>
+          <p className="mt-0.5 text-[11.5px] text-[#9ca3af]">{desc}</p>
         </div>
+        <Toggle enabled={enabled} onChange={onToggle} />
+      </div>
+    );
 
-        {/* Player Color */}
-        <div className="mt-6 border-t border-[#f0f0f5] pt-6">
-          <h4 className="mb-1 text-[14px] font-semibold text-[#1e1e2f]">Player Accent Color</h4>
-          <p className="mb-4 text-[12px] text-[#9ca3af]">Choose the accent color for the video player controls</p>
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* LEFT: grouped setting cards */}
+        <div className="lg:col-span-5 flex flex-col gap-5">
+          <div className="rounded-[16px] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <h3 className="mb-1 text-[13px] font-bold text-on-surface">Playback behavior</h3>
+            <p className="mb-2 text-[11.5px] text-on-surface-var">How the player starts and repeats.</p>
+            <div className="divide-y divide-[#f0f0f5]">
+              <ToggleRow label="Autoplay" desc="Auto-start video on page load" enabled={embedAutoplay} onToggle={() => setEmbedAutoplay(!embedAutoplay)} />
+              <ToggleRow label="Loop" desc="Repeat video when finished" enabled={embedLoop} onToggle={() => setEmbedLoop(!embedLoop)} />
+            </div>
+          </div>
 
-          <div className="flex items-center gap-4">
-            {/* Color preview + input */}
-            <div className="flex items-center gap-3">
+          <div className="rounded-[16px] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <h3 className="mb-1 text-[13px] font-bold text-on-surface">Controls &amp; embed</h3>
+            <p className="mb-2 text-[11.5px] text-on-surface-var">How the player looks on a host page.</p>
+            <div className="divide-y divide-[#f0f0f5]">
+              <ToggleRow label="Show controls" desc="Display player control bar" enabled={embedControls} onToggle={() => setEmbedControls(!embedControls)} />
+              <ToggleRow label="Responsive embed" desc="Auto-resize to container width" enabled={responsiveEmbed} onToggle={() => setResponsiveEmbed(!responsiveEmbed)} />
+            </div>
+          </div>
+
+          <div className="rounded-[16px] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <h3 className="mb-1 text-[13px] font-bold text-on-surface">Branding</h3>
+            <p className="mb-4 text-[11.5px] text-on-surface-var">Accent color for the control bar, progress, and play button.</p>
+
+            <div className="flex items-center gap-3 flex-wrap">
               <div
                 className="h-[38px] w-[38px] rounded-[10px] border border-[#e5e7eb] shadow-sm cursor-pointer"
                 style={{ backgroundColor: playerColor }}
-                onClick={() => {
-                  const input = document.getElementById("player-color-picker");
-                  if (input) input.click();
-                }}
+                onClick={() => { const input = document.getElementById("player-color-picker"); if (input) input.click(); }}
               />
-              <input
-                id="player-color-picker"
-                type="color"
-                value={playerColor}
-                onChange={(e) => { setPlayerColor(e.target.value); setPlayerColorInput(e.target.value); }}
-                className="sr-only"
-              />
+              <input id="player-color-picker" type="color" value={playerColor} onChange={(e) => { setPlayerColor(e.target.value); setPlayerColorInput(e.target.value); }} className="sr-only" />
               <input
                 type="text"
                 value={playerColorInput}
@@ -1492,28 +1522,100 @@ export default function SettingsPage() {
                 placeholder="#00aaff"
                 className="w-[100px] rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2 text-[13px] font-mono text-[#1e1e2f] focus:ring-2 focus:ring-primary/15 focus:outline-none"
               />
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.08em] ${
+                  aaPass ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                }`}
+                title={`Contrast vs player bg: ${contrastVsDark.toFixed(2)}:1`}
+              >
+                {aaPass ? "✓ AA" : "⚠ Low"} {contrastVsDark.toFixed(1)}:1
+              </span>
             </div>
-
-            {/* Preset swatches */}
-            <div className="flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
               {presetColors.map((c) => (
                 <button
                   key={c}
                   onClick={() => { setPlayerColor(c); setPlayerColorInput(c); }}
-                  className={`h-[24px] w-[24px] rounded-full border-2 transition-all ${
+                  className={`h-[22px] w-[22px] rounded-full border-2 transition-all ${
                     playerColor === c ? "border-[#1e1e2f] scale-110" : "border-transparent hover:scale-110"
                   }`}
                   style={{ backgroundColor: c }}
+                  aria-label={`Use color ${c}`}
                 />
               ))}
             </div>
           </div>
+
+          <div>
+            <button onClick={saveEmbed} disabled={embedSaving} className={btnPrimary}>
+              {embedSaving ? "Saving..." : "Save Player Settings"}
+            </button>
+          </div>
         </div>
 
-        <div className="mt-8">
-          <button onClick={saveEmbed} disabled={embedSaving} className={btnPrimary}>
-            {embedSaving ? "Saving..." : "Save Player Settings"}
-          </button>
+        {/* RIGHT: live preview + embed code */}
+        <div className="lg:col-span-7 flex flex-col gap-5">
+          <div className="rounded-[16px] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-[13px] font-bold text-on-surface">Live preview</h3>
+              <span className="text-[10.5px] font-bold uppercase tracking-[.1em] text-on-surface-var">{embedAutoplay ? "Autoplay" : "Click to play"}{embedLoop ? " · Loop" : ""}</span>
+            </div>
+
+            <div className="relative w-full overflow-hidden rounded-[12px] bg-[#0f0f10]" style={{ aspectRatio: "16 / 9" }}>
+              {/* fake poster with subtle gradient */}
+              <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(255,255,255,0.05) 0%, transparent 60%), linear-gradient(135deg,#1a1a1f 0%, #0b0b0d 100%)" }} />
+              {/* play button */}
+              <button
+                type="button"
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex h-[64px] w-[64px] items-center justify-center rounded-full transition-transform hover:scale-105"
+                style={{ backgroundColor: playerColor, boxShadow: `0 8px 30px ${playerColor}66` }}
+                aria-label="Play preview"
+              >
+                <span className="material-symbols-outlined text-white" style={{ fontSize: 36, fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
+              </button>
+
+              {/* Controls strip (conditional) */}
+              {embedControls && (
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-6">
+                  <div className="mb-2 flex h-1 w-full overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full" style={{ width: "34%", backgroundColor: playerColor }} />
+                    <div className="h-full w-2" style={{ backgroundColor: playerColor, boxShadow: `0 0 6px ${playerColor}` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-white/90 text-[11px]">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
+                      <span className="material-symbols-outlined text-[16px]">volume_up</span>
+                      <span className="tabular-nums">1:02 / 3:00</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[16px]">settings</span>
+                      <span className="material-symbols-outlined text-[16px]">fullscreen</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <p className="mt-3 text-[11px] text-on-surface-var">This is a static preview — toggle settings on the left and the player updates live.</p>
+          </div>
+
+          <div className="rounded-[16px] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-[13px] font-bold text-on-surface">Embed code</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(embedCode).then(() => toast("Embed code copied", "success")).catch(() => toast("Copy failed", "error"));
+                }}
+                className="inline-flex items-center gap-1 rounded-[8px] border border-on-surface/10 bg-white px-2.5 py-1 text-[11px] font-semibold text-on-surface-var hover:text-on-surface hover:border-primary/30"
+              >
+                <span className="material-symbols-outlined text-[13px]">content_copy</span>
+                Copy
+              </button>
+            </div>
+            <pre className="overflow-x-auto rounded-[10px] bg-[#0f172a] p-3 text-[11px] leading-relaxed text-[#e2e8f0] font-mono"><code>{embedCode}</code></pre>
+            <p className="mt-2 text-[11px] text-on-surface-var">Replace <code className="font-mono">VIDEO_ID</code> with any video ID from the Videos tab.</p>
+          </div>
         </div>
       </div>
     );
