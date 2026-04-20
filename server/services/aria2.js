@@ -57,6 +57,17 @@ async function addUri(uris, options = {}) {
 }
 
 /**
+ * Add a .torrent file (raw bytes) for download
+ * @param {Buffer} torrentBuffer - .torrent file contents
+ * @param {object} options - aria2 download options
+ * @returns {string} GID
+ */
+async function addTorrent(torrentBuffer, options = {}) {
+  const b64 = Buffer.from(torrentBuffer).toString('base64');
+  return rpcCall('addTorrent', [b64, [], options]);
+}
+
+/**
  * Get download status
  * @param {string} gid - Download GID
  * @returns {object} Status object with totalLength, completedLength, downloadSpeed, etc.
@@ -207,6 +218,7 @@ function findLargestVideoFile(files) {
 
 module.exports = {
   addUri,
+  addTorrent,
   tellStatus,
   pause,
   forcePause,

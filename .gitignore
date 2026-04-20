@@ -5,8 +5,8 @@ build/
 *.log
 .env
 .env.local
-uploads/
-downloads/
-videos/
-storage/
-aria2/
+/uploads/
+/downloads/
+/videos/
+/storage/
+/aria2/

@@ -1134,6 +1134,14 @@ loadEncodingConfig()
     job.progress(100);
     console.log(`Video ${videoId} processing complete`);
 
+    // Encoding done — drop the linked torrent_downloads row (if any) so the
+    // Completed tab no longer shows it. Safe even if no row exists.
+    try {
+      await db.query('DELETE FROM torrent_downloads WHERE video_id = $1', [videoId]);
+    } catch (e) {
+      console.warn('[worker] Failed to clear torrent_downloads row for', videoId, e.message);
+    }
+
     // If this video came from a download (torrent/URL), clean up the downloaded files.
     // Path safety: use path.relative() to verify the candidate is INSIDE downloadsRoot,
     // not just sharing a string prefix. Without this, a folder like
@@ -1178,6 +1186,16 @@ loadEncodingConfig()
       'UPDATE videos SET status = $1 WHERE id = $2',
       ['error', videoId]
     );
+
+    // Surface the failure on the Downloads tab so user can retry/remove.
+    try {
+      await db.query(
+        "UPDATE torrent_downloads SET status='error', error_message=$1 WHERE video_id=$2",
+        [String(error?.message || 'Encoding failed').slice(0, 500), videoId]
+      );
+    } catch (e) {
+      console.warn('[worker] Failed to mark torrent_downloads row as error for', videoId, e.message);
+    }
 
     // Best-effort immediate cleanup of partial artifacts so disk doesn't fill up
     // before the hourly auto-cleanup pass runs. All operations are wrapped

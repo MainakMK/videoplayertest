@@ -7,7 +7,18 @@ const router  = express.Router();
 const db      = require('../db/index');
 const auth    = require('../middleware/auth');
 const { requireMinRole } = require('../middleware/roles');
+const multer   = require('multer');
 const aria2    = require('../services/aria2');
+
+const torrentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 20 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.torrent') cb(null, true);
+    else cb(new Error('Only .torrent files are allowed'), false);
+  },
+});
 const storage  = require('../services/storage');
 const { audit } = require('../services/audit');
 
@@ -29,7 +40,9 @@ router.get('/', async (req, res) => {
     // Enrich downloads with live aria2 data
     const enriched = await Promise.all(rows.map(async (row) => {
       // Query aria2 for any non-final status (active, paused, or DB says active but aria2 finished)
-      const needsAria2 = row.gid && (row.status === 'active' || row.status === 'paused' || row.status === 'seeding');
+      // Skip demo rows — they have no aria2 backing.
+      const isDemo = row.gid && row.gid.startsWith('demo-');
+      const needsAria2 = !isDemo && row.gid && (row.status === 'active' || row.status === 'paused' || row.status === 'seeding');
       if (needsAria2) {
         try {
           const s = await aria2.tellStatus(row.gid);
@@ -110,7 +123,7 @@ router.get('/', async (req, res) => {
       }
 
       // Safety net: for any completed download, verify file size from disk
-      if ((row.status === 'complete' || row.status === 'processing') && row.file_path) {
+      if (!isDemo && (row.status === 'complete' || row.status === 'processing') && row.file_path) {
         try {
           const stat = fs.statSync(row.file_path);
           if (stat.size > row.total_size) {
@@ -210,6 +223,51 @@ router.post('/add', async (req, res) => {
   }
 });
 
+// ── POST /add-file — Upload one or more .torrent files ──
+router.post('/add-file', torrentUpload.array('torrents', 20), async (req, res) => {
+  try {
+    const files = req.files || [];
+    if (!files.length) {
+      return res.status(400).json({ error: 'No .torrent files provided' });
+    }
+
+    const connected = await aria2.isConnected();
+    if (!connected) {
+      return res.status(503).json({ error: 'aria2 daemon is not running. Start it with: aria2c --enable-rpc' });
+    }
+
+    const storageType = req.body.storage_type || 'local';
+    const created = [];
+    const failed = [];
+
+    for (const file of files) {
+      try {
+        const gid = await aria2.addTorrent(file.buffer, {
+          dir: DOWNLOAD_DIR,
+          'seed-time': '0',
+          'max-upload-limit': '100K',
+          'bt-stop-timeout': '60',
+        });
+        const baseName = file.originalname.replace(/\.torrent$/i, '');
+        const { rows } = await db.query(
+          `INSERT INTO torrent_downloads (gid, name, status, storage_type, source_type, created_at)
+           VALUES ($1, $2, 'active', $3, 'torrent_file', NOW()) RETURNING *`,
+          [gid, baseName, storageType]
+        );
+        audit(req, 'download.add', 'download', rows[0].id, { name: baseName, gid, source_type: 'torrent_file' });
+        created.push(rows[0]);
+      } catch (e) {
+        failed.push({ filename: file.originalname, error: e.message });
+      }
+    }
+
+    res.status(201).json({ created, failed });
+  } catch (err) {
+    console.error('Error uploading torrent file:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload torrent file' });
+  }
+});
+
 // ── GET /:id/status — Get single torrent status ──
 router.get('/:id/status', async (req, res) => {
   try {
@@ -241,7 +299,8 @@ router.post('/:id/pause', async (req, res) => {
     const { rows } = await db.query('SELECT * FROM torrent_downloads WHERE id = $1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Torrent not found' });
 
-    await aria2.pause(rows[0].gid);
+    const isDemo = rows[0].gid && rows[0].gid.startsWith('demo-');
+    if (!isDemo) await aria2.pause(rows[0].gid);
     await db.query("UPDATE torrent_downloads SET status='paused' WHERE id=$1", [req.params.id]);
     audit(req, 'torrent.pause', 'torrent', req.params.id);
     res.json({ success: true });
@@ -256,7 +315,8 @@ router.post('/:id/resume', async (req, res) => {
     const { rows } = await db.query('SELECT * FROM torrent_downloads WHERE id = $1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Torrent not found' });
 
-    await aria2.unpause(rows[0].gid);
+    const isDemo = rows[0].gid && rows[0].gid.startsWith('demo-');
+    if (!isDemo) await aria2.unpause(rows[0].gid);
     await db.query("UPDATE torrent_downloads SET status='active' WHERE id=$1", [req.params.id]);
     audit(req, 'torrent.resume', 'torrent', req.params.id);
     res.json({ success: true });
@@ -272,13 +332,14 @@ router.delete('/:id', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Torrent not found' });
 
     const row = rows[0];
-    if (row.gid) {
+    const isDemo = row.gid && row.gid.startsWith('demo-');
+    if (!isDemo && row.gid) {
       try { await aria2.forceRemove(row.gid); } catch {}
       try { await aria2.removeDownloadResult(row.gid); } catch {}
     }
 
     // Clean up downloaded files
-    if (row.file_path) {
+    if (!isDemo && row.file_path) {
       try { fs.unlinkSync(row.file_path); } catch {}
     }
 
@@ -313,11 +374,16 @@ router.post('/:id/process', async (req, res) => {
     const fileName = path.basename(torrent.file_path);
     const fileSize = fs.existsSync(torrent.file_path) ? fs.statSync(torrent.file_path).size : torrent.total_size;
 
+    // Storage destination is chosen at process time (not download time).
+    const storageType = (req.body?.storage_type === 'r2' || req.body?.storage_type === 'local')
+      ? req.body.storage_type
+      : (torrent.storage_type || 'local');
+
     // Create video entry — embed link is available immediately
     const videoResult = await db.query(
       `INSERT INTO videos (id, title, original_filename, file_size, status, storage_type, visibility, created_at, updated_at)
        VALUES ($1, $2, $3, $4, 'uploading', $5, 'private', NOW(), NOW()) RETURNING *`,
-      [videoId, title, fileName, fileSize, torrent.storage_type || 'local']
+      [videoId, title, fileName, fileSize, storageType]
     );
 
     // Import subtitle files NOW (before encoding, so embed link already has subtitles)
@@ -354,15 +420,19 @@ router.post('/:id/process', async (req, res) => {
       videoId,
       filePath: torrent.file_path,
       originalFilename: fileName,
-      storageType: torrent.storage_type || 'local',
+      storageType,
       torrentDir: path.dirname(torrent.file_path), // for cleanup after encoding
     }, {
       attempts: 2,
       backoff: { type: 'exponential', delay: 30000 },
     });
 
-    // Remove from downloads — video now lives in Videos section only
-    await db.query('DELETE FROM torrent_downloads WHERE id = $1', [torrent.id]);
+    // Keep the row but mark it processing + link to the new video. The worker
+    // will DELETE it once encoding finishes, or mark it 'error' on failure.
+    await db.query(
+      "UPDATE torrent_downloads SET status='processing', video_id=$1 WHERE id=$2",
+      [videoId, torrent.id]
+    );
 
     audit(req, 'torrent.process', 'torrent', torrent.id, { video_id: videoId, title });
 
@@ -370,6 +440,91 @@ router.post('/:id/process', async (req, res) => {
   } catch (err) {
     console.error('Error processing torrent:', err);
     res.status(500).json({ error: 'Failed to start video processing' });
+  }
+});
+
+// ── POST /bulk — Bulk action: pause | resume | remove | process ──
+router.post('/bulk', async (req, res) => {
+  try {
+    const { action, ids, storage_type } = req.body || {};
+    const bulkStorage = (storage_type === 'r2' || storage_type === 'local') ? storage_type : null;
+    if (!Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' });
+    }
+    if (!['pause', 'resume', 'remove', 'process'].includes(action)) {
+      return res.status(400).json({ error: 'action must be pause | resume | remove | process' });
+    }
+
+    // Forward each id to its own route logic via internal helper. We just call
+    // the same RPC + DB ops the single-id endpoints do, gathering per-id outcomes.
+    const results = { ok: [], failed: [] };
+    for (const id of ids) {
+      try {
+        const { rows } = await db.query('SELECT * FROM torrent_downloads WHERE id = $1', [id]);
+        if (!rows.length) { results.failed.push({ id, error: 'not found' }); continue; }
+        const row = rows[0];
+        const isDemo = row.gid && row.gid.startsWith('demo-');
+
+        if (action === 'pause') {
+          if (!isDemo && row.gid) await aria2.pause(row.gid);
+          await db.query("UPDATE torrent_downloads SET status='paused' WHERE id=$1", [id]);
+          audit(req, 'torrent.pause', 'torrent', id);
+          results.ok.push(id);
+        } else if (action === 'resume') {
+          if (!isDemo && row.gid) await aria2.unpause(row.gid);
+          await db.query("UPDATE torrent_downloads SET status='active' WHERE id=$1", [id]);
+          audit(req, 'torrent.resume', 'torrent', id);
+          results.ok.push(id);
+        } else if (action === 'remove') {
+          if (!isDemo && row.gid) {
+            try { await aria2.forceRemove(row.gid); } catch {}
+            try { await aria2.removeDownloadResult(row.gid); } catch {}
+          }
+          if (!isDemo && row.file_path) { try { fs.unlinkSync(row.file_path); } catch {} }
+          await db.query('DELETE FROM torrent_downloads WHERE id = $1', [id]);
+          audit(req, 'torrent.delete', 'torrent', id, { name: row.name });
+          results.ok.push(id);
+        } else if (action === 'process') {
+          if (row.status !== 'complete') { results.failed.push({ id, error: 'not complete' }); continue; }
+          if (!row.file_path) { results.failed.push({ id, error: 'no file' }); continue; }
+          if (row.video_id) { results.failed.push({ id, error: 'already processing' }); continue; }
+
+          const videoId = crypto.randomBytes(8).toString('base64url').slice(0, 12);
+          const title = row.name?.replace(/\.[^/.]+$/, '') || 'Torrent Video';
+          const fileName = path.basename(row.file_path);
+          const fileSize = fs.existsSync(row.file_path) ? fs.statSync(row.file_path).size : row.total_size;
+
+          const sType = bulkStorage || row.storage_type || 'local';
+          await db.query(
+            `INSERT INTO videos (id, title, original_filename, file_size, status, storage_type, visibility, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 'uploading', $5, 'private', NOW(), NOW())`,
+            [videoId, title, fileName, fileSize, sType]
+          );
+
+          await videoQueue.add({
+            videoId,
+            filePath: row.file_path,
+            originalFilename: fileName,
+            storageType: sType,
+            torrentDir: path.dirname(row.file_path),
+          }, { attempts: 2, backoff: { type: 'exponential', delay: 30000 } });
+
+          await db.query(
+            "UPDATE torrent_downloads SET status='processing', video_id=$1 WHERE id=$2",
+            [videoId, id]
+          );
+          audit(req, 'torrent.process', 'torrent', id, { video_id: videoId, title });
+          results.ok.push(id);
+        }
+      } catch (e) {
+        results.failed.push({ id, error: e.message || 'failed' });
+      }
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error('Bulk action error:', err);
+    res.status(500).json({ error: 'Bulk action failed' });
   }
 });
 

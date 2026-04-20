@@ -338,7 +338,10 @@ CREATE TABLE IF NOT EXISTS torrent_downloads (
 );
 CREATE INDEX IF NOT EXISTS idx_torrent_status ON torrent_downloads(status);
 CREATE INDEX IF NOT EXISTS idx_torrent_created ON torrent_downloads(created_at DESC);
-ALTER TABLE torrent_downloads ADD COLUMN IF NOT EXISTS source_type VARCHAR(10) DEFAULT 'magnet' CHECK (source_type IN ('magnet','url'));
+ALTER TABLE torrent_downloads ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) DEFAULT 'magnet';
+ALTER TABLE torrent_downloads ALTER COLUMN source_type TYPE VARCHAR(20);
+ALTER TABLE torrent_downloads DROP CONSTRAINT IF EXISTS torrent_downloads_source_type_check;
+ALTER TABLE torrent_downloads ADD CONSTRAINT torrent_downloads_source_type_check CHECK (source_type IN ('magnet','url','torrent_file'));
 
 -- ─────────────────────────────────────────
 -- TEAM MEMBERS (roles)

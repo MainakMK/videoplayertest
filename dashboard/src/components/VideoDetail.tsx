@@ -123,6 +123,7 @@ function ThumbnailPicker({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function pickCandidate(idx: number) {
@@ -177,8 +178,49 @@ function ThumbnailPicker({
     }
   }
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setDropActive(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setDropActive(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropActive(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setDropActive(false);
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    if (!file) {
+      setError("Drop a PNG, JPG, WEBP, or GIF image");
+      return;
+    }
+    uploadCustom(file);
+  };
+
   return (
-    <div className="rounded-card bg-surface-card p-6 shadow-card">
+    <div
+      className={`relative rounded-card bg-surface-card p-6 shadow-card transition-all ${
+        dropActive ? "ring-2 ring-primary ring-offset-2" : ""
+      }`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dropActive && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-card bg-primary/10 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-[10px] bg-primary px-4 py-2 text-[13px] font-semibold text-white shadow-lg">
+            <span className="material-symbols-outlined text-[16px]">file_download</span>
+            Drop image to upload
+          </div>
+        </div>
+      )}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-semibold text-on-surface">Thumbnail</h2>
         {customSet && (
@@ -227,7 +269,7 @@ function ThumbnailPicker({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp,image/gif"
           className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCustom(f); e.target.value = ''; }}
         />
@@ -239,6 +281,10 @@ function ThumbnailPicker({
           {busy === 'upload' ? 'Uploading...' : customSet ? 'Replace custom image' : 'Upload custom image'}
         </button>
       </div>
+
+      <p className="mt-2 text-[11.5px] text-on-surface-var">
+        PNG, JPG, WEBP or GIF · up to 10 MB · drag &amp; drop supported
+      </p>
 
       {error && <p className="mt-2 text-[11.5px] text-error">{error}</p>}
       {!candidates.length && !customSet && (
@@ -283,8 +329,23 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
   // Subtitle state
   const [subtitleRows, setSubtitleRows] = useState<SubtitleRow[]>([]);
   const [savingSubs, setSavingSubs] = useState(false);
+
+  // Chapter state
+  const [chapters, setChapters] = useState<{ time: string; title: string }[]>([]);
+  const [savingChapters, setSavingChapters] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "settings" | "embed">("overview");
+
+  // Per-video settings state
+  const [publishedAt, setPublishedAt] = useState("");
+  const [geoMode, setGeoMode] = useState<"off" | "allowlist" | "blocklist">("off");
+  const [geoCountries, setGeoCountries] = useState("");
+  const [allowedDomains, setAllowedDomains] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [rotatingKey, setRotatingKey] = useState(false);
 
   // ------ Fetch video details ------
   const fetchVideo = useCallback(async () => {
@@ -304,6 +365,20 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
       } else {
         setTagsInput("");
       }
+      // Per-video settings (fields live on the video record but aren't in VideoResponse type)
+      const v: Record<string, unknown> = data as unknown as Record<string, unknown>;
+      const pubAt = v.published_at;
+      setPublishedAt(typeof pubAt === "string" ? new Date(pubAt).toISOString().slice(0, 16) : "");
+      const g = v.geo_restriction as { mode?: string; countries?: string[] } | null | undefined;
+      if (g && (g.mode === "allowlist" || g.mode === "blocklist")) {
+        setGeoMode(g.mode);
+        setGeoCountries((g.countries ?? []).join(", "));
+      } else {
+        setGeoMode("off");
+        setGeoCountries("");
+      }
+      const d = v.allowed_domains;
+      setAllowedDomains(Array.isArray(d) ? d.join(", ") : (typeof d === "string" ? d : ""));
     } catch (err: any) {
       setError(String(err?.message ?? "Failed to load video"));
     } finally {
@@ -341,11 +416,92 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
     }
   }, [videoId]);
 
+  // ------ Fetch chapters ------
+  const fetchChapters = useCallback(async () => {
+    try {
+      const data = await api.get<{ chapters: { time: string; title: string }[] }>(`/videos/${videoId}/chapters`);
+      setChapters(data.chapters ?? []);
+    } catch (err) {
+      console.error("Failed to fetch chapters:", err);
+    }
+  }, [videoId]);
+
   useEffect(() => {
     fetchVideo();
     fetchAnalytics();
     fetchSubtitles();
-  }, [fetchVideo, fetchAnalytics, fetchSubtitles]);
+    fetchChapters();
+  }, [fetchVideo, fetchAnalytics, fetchSubtitles, fetchChapters]);
+
+  // ------ Chapter helpers ------
+  const addChapter = () => {
+    setChapters((prev) => [...prev, { time: "00:00", title: "" }]);
+  };
+  const updateChapter = (idx: number, patch: Partial<{ time: string; title: string }>) => {
+    setChapters((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+  };
+  const removeChapter = (idx: number) => {
+    setChapters((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const countries = geoCountries
+        .split(",")
+        .map((c) => c.trim().toUpperCase())
+        .filter(Boolean);
+      const body: Record<string, unknown> = {
+        published_at: publishedAt ? new Date(publishedAt).toISOString() : null,
+        geo_restriction: geoMode === "off" ? null : { mode: geoMode, countries },
+        allowed_domains: allowedDomains
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean),
+      };
+      await api.put(`/videos/${videoId}`, body);
+      setToast("Settings saved");
+      setTimeout(() => setToast(null), 2500);
+      fetchVideo();
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setToast(err.message ?? "Failed to save settings");
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleRotateKey = async () => {
+    if (!confirm("Rotate the encryption key for this video? Viewers currently watching may need to reload.")) return;
+    setRotatingKey(true);
+    try {
+      await api.post(`/videos/${videoId}/rotate-key`);
+      setToast("Encryption key rotated");
+      setTimeout(() => setToast(null), 2500);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setToast(err.message ?? "Failed to rotate key");
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setRotatingKey(false);
+    }
+  };
+
+  const handleSaveChapters = async () => {
+    setSavingChapters(true);
+    try {
+      await api.put(`/videos/${videoId}/chapters`, { chapters });
+      setToast("Chapters saved");
+      setTimeout(() => setToast(null), 2500);
+      fetchChapters();
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setToast(err.message ?? "Failed to save chapters");
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setSavingChapters(false);
+    }
+  };
 
   // ------ Save ------
   const handleSave = async () => {
@@ -373,6 +529,69 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
       ...prev,
       { id: `new-${Date.now()}`, title: "", file: null },
     ]);
+  };
+
+  // Auto-detect ISO language code from filenames like "movie.en.srt" or "subs-es.vtt"
+  const languageFromFilename = (name: string): string => {
+    const base = name.toLowerCase().replace(/\.(srt|vtt|ass|sub)$/i, "");
+    const m = base.match(/[.\-_]([a-z]{2,3})$/);
+    return m ? m[1].toUpperCase() : "";
+  };
+
+  const SUB_EXT_RE = /\.(srt|vtt|ass|sub)$/i;
+  const MAX_SUB_BYTES = 2 * 1024 * 1024; // 2 MB
+
+  const validateAndAddSubtitleFiles = (files: File[]) => {
+    const accepted: File[] = [];
+    let rejected = 0;
+    for (const f of files) {
+      if (!SUB_EXT_RE.test(f.name)) { rejected++; continue; }
+      if (f.size > MAX_SUB_BYTES) { rejected++; continue; }
+      accepted.push(f);
+    }
+    if (accepted.length === 0) {
+      setToast(rejected > 0 ? "Unsupported file — use .srt .vtt .ass .sub (max 2 MB)" : "No files dropped");
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    setSubtitleRows((prev) => [
+      ...prev,
+      ...accepted.map((f) => ({
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        title: languageFromFilename(f.name),
+        file: f,
+      })),
+    ]);
+    if (rejected > 0) {
+      setToast(`Added ${accepted.length} · skipped ${rejected} unsupported`);
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  // Per-row OS-file drop (replaces just that row's file). Distinguished from
+  // internal reorder drag by checking dataTransfer.types for "Files".
+  const handleRowFileDrop = (e: React.DragEvent, rowId: string) => {
+    if (!e.dataTransfer.types.includes("Files")) return; // internal reorder — let handleDrop run
+    e.preventDefault();
+    e.stopPropagation();
+    const file = Array.from(e.dataTransfer.files).find((f) => SUB_EXT_RE.test(f.name) && f.size <= MAX_SUB_BYTES);
+    if (!file) {
+      setToast("Unsupported file — use .srt .vtt .ass .sub (max 2 MB)");
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    updateSubtitleRow(rowId, { file });
+    setDragOverIdx(null);
+  };
+
+  // "New Subtitle +" zone OS-file drop
+  const [subDropActive, setSubDropActive] = useState(false);
+  const handleNewSubtitleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSubDropActive(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length) validateAndAddSubtitleFiles(files);
   };
 
   const updateSubtitleRow = (id: string, updates: Partial<SubtitleRow>) => {
@@ -522,23 +741,71 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
 
       {/* Header */}
       <div className="border-b border-on-surface/5 bg-surface-card px-6 py-4">
-        <button
-          onClick={onBack}
-          className="mb-2 flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-dim"
-        >
-          &larr; Back to Videos
-        </button>
-        <h1 className="text-xl font-bold text-on-surface">{video.title}</h1>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <button
+              onClick={onBack}
+              className="mb-2 flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-dim"
+            >
+              &larr; Back to Videos
+            </button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-on-surface">{video.title}</h1>
+              <StatusBadge status={video.status} />
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const link = `${window.location.origin}/embed/${videoId}`;
+              navigator.clipboard.writeText(link).then(() => {
+                setToast("Share link copied");
+                setTimeout(() => setToast(null), 2000);
+              });
+            }}
+            className="inline-flex items-center gap-1.5 rounded-btn bg-surface-low px-3 py-2 text-[12.5px] font-semibold text-primary hover:bg-surface-high"
+          >
+            <span className="material-symbols-outlined text-[15px]">share</span>
+            Share
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-4 flex gap-1 rounded-[10px] bg-surface-low p-1 w-fit">
+          {([
+            { key: "overview",  label: "Overview",  icon: "visibility" },
+            { key: "analytics", label: "Analytics", icon: "analytics" },
+            { key: "settings",  label: "Settings",  icon: "tune" },
+            { key: "embed",     label: "Embed",     icon: "code" },
+          ] as const).map((t) => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] transition-all"
+                style={
+                  active
+                    ? { background: "rgb(var(--surface-card-rgb))", color: "rgb(var(--on-surface-rgb))", fontWeight: 700, boxShadow: "0 1px 3px rgba(0,0,0,.08)" }
+                    : { background: "transparent", color: "rgb(var(--on-surface-var-rgb))", fontWeight: 500 }
+                }
+              >
+                <span className="material-symbols-outlined text-[14px]">{t.icon}</span>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Two-column layout */}
+      {/* Tab content */}
       <div className="mx-auto max-w-7xl p-6">
+        {activeTab === "overview" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* ================================================================ */}
-          {/* LEFT COLUMN - Video Details & Edit                               */}
+          {/* LEFT COLUMN — player + file info + Chapters + Subtitles         */}
           {/* ================================================================ */}
-          <div className="space-y-6 lg:col-span-1">
-            {/* Thumbnail placeholder */}
+          <div className="space-y-6 lg:col-span-2">
+            {/* Video player */}
             <div className="aspect-video overflow-hidden rounded-card bg-black">
               <iframe
                 src={`/v/${videoId}`}
@@ -549,114 +816,90 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
               />
             </div>
 
-            {/* Thumbnail picker (custom + 3 candidates) */}
-            <ThumbnailPicker
-              videoId={videoId}
-              currentThumbnailUrl={video.thumbnail_url || ''}
-              candidates={video.thumbnail_candidates || []}
-              customSet={!!video.custom_thumbnail_set}
-              onChange={(newUrl, custom) => {
-                setVideo({ ...video, thumbnail_url: newUrl, custom_thumbnail_set: custom });
-              }}
-            />
-
-            {/* Status + file info */}
-            <div className="rounded-card bg-surface-card p-6 shadow-card">
-              <div className="mb-4 flex items-center justify-between">
-                <span className="text-sm font-medium text-on-surface">Status</span>
-                <StatusBadge status={video.status} />
+            {/* File info strip — horizontal 3-col (File size · Duration · Uploaded) */}
+            <div className="rounded-card bg-surface-card shadow-card grid grid-cols-3 divide-x divide-on-surface/5">
+              <div className="flex flex-col items-center justify-center py-4 px-3">
+                <span className="text-[9.5px] font-bold uppercase tracking-[.1em] text-on-surface-var">File Size</span>
+                <span className="mt-1 text-[15px] font-bold text-on-surface">{formatSize(video.file_size)}</span>
               </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-on-surface-var">File size</span>
-                  <span className="text-on-surface">{formatSize(video.file_size)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-on-surface-var">Duration</span>
-                  <span className="text-on-surface">{formatDuration(video.duration)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-on-surface-var">Upload date</span>
-                  <span className="text-on-surface">
-                    {new Date(video.created_at).toLocaleDateString()}
-                  </span>
-                </div>
+              <div className="flex flex-col items-center justify-center py-4 px-3">
+                <span className="text-[9.5px] font-bold uppercase tracking-[.1em] text-on-surface-var">Duration</span>
+                <span className="mt-1 text-[15px] font-bold text-on-surface">{formatDuration(video.duration)}</span>
+              </div>
+              <div className="flex flex-col items-center justify-center py-4 px-3">
+                <span className="text-[9.5px] font-bold uppercase tracking-[.1em] text-on-surface-var">Uploaded</span>
+                <span className="mt-1 text-[15px] font-bold text-on-surface">
+                  {new Date(video.created_at).toLocaleDateString()}
+                </span>
               </div>
             </div>
 
-            {/* Edit form */}
+            {/* Chapters */}
             <div className="rounded-card bg-surface-card p-6 shadow-card">
-              <h2 className="mb-4 text-base font-semibold text-on-surface">Edit Details</h2>
-              <div className="space-y-4">
-                {/* Title */}
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Title</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="Video title"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">
-                    Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={4}
-                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="Add a description..."
-                  />
-                </div>
-
-                {/* Visibility */}
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">
-                    Visibility
-                  </label>
-                  <select
-                    value={visibility}
-                    onChange={(e) => setVisibility(e.target.value)}
-                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-on-surface">Chapters</h2>
+                <div className="flex items-center gap-2">
+                  {chapters.length > 0 && (
+                    <button
+                      onClick={handleSaveChapters}
+                      disabled={savingChapters}
+                      className="inline-flex items-center gap-1 rounded-btn bg-primary px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[15px] font-normal">save</span>
+                      {savingChapters ? "Saving…" : "Save"}
+                    </button>
+                  )}
+                  <button
+                    onClick={addChapter}
+                    className="inline-flex items-center gap-1 rounded-btn bg-surface-low px-3 py-1.5 text-[12px] font-semibold text-on-surface hover:bg-surface-high"
                   >
-                    <option value="public">Public</option>
-                    <option value="unlisted">Unlisted</option>
-                    <option value="private">Private</option>
-                  </select>
+                    <span className="material-symbols-outlined text-[15px] font-normal">add</span>
+                    Add chapter
+                  </button>
                 </div>
-
-                {/* Tags */}
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Tags</label>
-                  <input
-                    type="text"
-                    value={tagsInput}
-                    onChange={(e) => setTagsInput(e.target.value)}
-                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="tag1, tag2, tag3"
-                  />
-                  <p className="mt-1 text-xs text-on-surface-var">Separate tags with commas</p>
-                </div>
-
-                {/* Save */}
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-full rounded-btn bg-gradient-to-r from-primary to-primary-dim px-4 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)] disabled:opacity-50"
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
               </div>
+
+              {chapters.length === 0 ? (
+                <div className="rounded-btn bg-surface-low/60 py-8 text-center text-[13px] text-on-surface-var">
+                  <span className="material-symbols-outlined text-[24px] font-normal opacity-50 block mb-1">format_list_numbered</span>
+                  No chapters yet — add one to mark sections in the player.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {chapters.map((c, idx) => (
+                    <div key={idx} className="grid grid-cols-[90px_1fr_auto] items-center gap-2 rounded-btn bg-surface-low px-2 py-2">
+                      <input
+                        type="text"
+                        value={c.time}
+                        onChange={(e) => updateChapter(idx, { time: e.target.value })}
+                        placeholder="00:00"
+                        className="rounded border-0 bg-surface-card px-2 py-1 font-mono text-[12.5px] text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <input
+                        type="text"
+                        value={c.title}
+                        onChange={(e) => updateChapter(idx, { title: e.target.value })}
+                        placeholder="Chapter title"
+                        className="rounded border-0 bg-surface-card px-2 py-1 text-[13px] text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <button
+                        onClick={() => removeChapter(idx)}
+                        title="Remove chapter"
+                        aria-label="Remove chapter"
+                        className="flex items-center justify-center w-[28px] h-[28px] rounded-btn text-error hover:bg-error/10"
+                      >
+                        <span className="material-symbols-outlined text-[16px] font-normal">delete</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Subtitles */}
             <div className="rounded-card bg-surface-card p-6 shadow-card">
-              <h2 className="mb-4 text-base font-semibold text-on-surface">Subtitles</h2>
+              <h2 className="mb-2 text-base font-semibold text-on-surface">Subtitles</h2>
+              <p className="mb-3 text-xs text-on-surface-var">Only vtt, srt, ass, sub and zip/rar/7z file types are supported.</p>
 
               {/* Header row */}
               {subtitleRows.length > 0 && (
@@ -677,7 +920,13 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                     draggable
                     onDragStart={() => handleDragStart(idx)}
                     onDragOver={(e) => handleDragOver(e, idx)}
-                    onDrop={() => handleDrop(idx)}
+                    onDrop={(e) => {
+                      if (e.dataTransfer.types.includes("Files")) {
+                        handleRowFileDrop(e, row.id);
+                      } else {
+                        handleDrop(idx);
+                      }
+                    }}
                     onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
                     className={`grid grid-cols-[24px_80px_1fr_1fr_60px] items-center gap-2 rounded-btn border px-2 py-2 transition-colors ${
                       dragOverIdx === idx
@@ -738,18 +987,25 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
                 ))}
               </div>
 
-              {/* Supported formats note */}
-              <p className="mt-3 text-xs text-on-surface-var">
-                Only vtt, srt, ass, sub file types are supported.
-              </p>
-
-              {/* Add new subtitle button */}
-              <button
+              {/* Add new subtitle — dashed drop zone (click OR drop files) */}
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={addSubtitleRow}
-                className="mt-3 w-full rounded-btn border-2 border-dashed border-on-surface/15 px-4 py-2 text-sm font-medium text-on-surface-var hover:border-primary hover:text-primary"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); addSubtitleRow(); } }}
+                onDragEnter={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setSubDropActive(true); } }}
+                onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setSubDropActive(true); } }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setSubDropActive(false); }}
+                onDrop={handleNewSubtitleDrop}
+                className={`mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-4 py-5 text-sm font-medium transition-colors ${
+                  subDropActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-on-surface/15 text-on-surface-var hover:border-primary hover:bg-surface-low hover:text-primary"
+                }`}
               >
-                New Subtitle +
-              </button>
+                <span className="material-symbols-outlined text-[16px]">{subDropActive ? "file_download" : "add"}</span>
+                {subDropActive ? "Drop subtitle files here" : "New Subtitle + or drop files here"}
+              </div>
 
               {/* Save / Reset buttons */}
               {subtitleRows.length > 0 && (
@@ -771,27 +1027,113 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
               )}
             </div>
 
-            {/* Embed code */}
+          </div>
+
+          {/* ================================================================ */}
+          {/* RIGHT COLUMN — Edit Details + Custom Thumbnail + Embed Code     */}
+          {/* ================================================================ */}
+          <div className="space-y-6 lg:col-span-1">
+            {/* Edit Details */}
+            {(() => {
+              const dirty = !!video && (title !== (video.title ?? "") || description !== (video.description ?? ""));
+              return (
+                <div className="rounded-card bg-surface-card p-6 shadow-card">
+                  <h2 className="mb-4 text-base font-semibold text-on-surface">Edit Details</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Title</label>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="Video title"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Description</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={4}
+                        className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="Add a description..."
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      {dirty ? (
+                        <span className="unsaved-indicator">Unsaved changes</span>
+                      ) : (
+                        <span />
+                      )}
+                      <button
+                        onClick={handleSave}
+                        disabled={saving || !dirty}
+                        className="rounded-btn bg-gradient-to-r from-primary to-primary-dim px-4 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)] disabled:opacity-50"
+                      >
+                        {saving ? "Saving..." : "Save Changes"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Custom Thumbnail */}
+            <ThumbnailPicker
+              videoId={videoId}
+              currentThumbnailUrl={video.thumbnail_url || ''}
+              candidates={video.thumbnail_candidates || []}
+              customSet={!!video.custom_thumbnail_set}
+              onChange={(newUrl, custom) => {
+                setVideo({ ...video, thumbnail_url: newUrl, custom_thumbnail_set: custom });
+              }}
+            />
+
+            {/* Embed Code */}
             <div className="rounded-card bg-surface-card p-6 shadow-card">
-              <h2 className="mb-3 text-base font-semibold text-on-surface">Embed Code</h2>
-              <div className="relative">
-                <pre className="overflow-x-auto rounded-btn bg-surface-low p-3 text-xs text-on-surface">
-                  {embedCode}
-                </pre>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-on-surface">Embed Code</h2>
+                <button
+                  onClick={() => setActiveTab("embed")}
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:text-primary-dim"
+                >
+                  <span className="material-symbols-outlined text-[14px]">tune</span>
+                  Customize
+                </button>
+              </div>
+              <pre className="overflow-x-auto rounded-btn bg-surface-low p-3 font-mono text-[11.5px] leading-relaxed text-on-surface">
+                {embedCode}
+              </pre>
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   onClick={copyEmbed}
-                  className="mt-2 rounded-btn bg-gradient-to-r from-primary to-primary-dim px-3 py-1.5 text-xs font-medium text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)]"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-btn bg-surface-low px-3 py-2 text-[12.5px] font-semibold text-primary hover:bg-surface-high"
                 >
-                  {copied ? "Copied!" : "Copy"}
+                  <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                  {copied ? "Copied!" : "Copy iFrame"}
+                </button>
+                <button
+                  onClick={() => {
+                    const link = `${typeof window !== "undefined" ? window.location.origin : ""}/embed/${videoId}`;
+                    navigator.clipboard.writeText(link).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    });
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-btn bg-surface-low px-3 py-2 text-[12.5px] font-semibold text-primary hover:bg-surface-high"
+                >
+                  <span className="material-symbols-outlined text-[14px]">link</span>
+                  Copy Link
                 </button>
               </div>
             </div>
           </div>
+        </div>
+        )}
 
-          {/* ================================================================ */}
-          {/* RIGHT COLUMN - Analytics                                         */}
-          {/* ================================================================ */}
-          <div className="space-y-6 lg:col-span-2">
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
             {analyticsLoading ? (
               <div className="flex min-h-[300px] items-center justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-on-surface-var/20 border-t-primary" />
@@ -915,7 +1257,189 @@ export default function VideoDetail({ videoId, onBack }: VideoDetailProps) {
               </div>
             )}
           </div>
-        </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div className="space-y-6 max-w-3xl">
+            {/* Visibility + Tags */}
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-4 text-base font-semibold text-on-surface">Visibility &amp; Tags</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Visibility</label>
+                  <select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value)}
+                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="public">Public</option>
+                    <option value="unlisted">Unlisted</option>
+                    <option value="private">Private</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Tags</label>
+                  <input
+                    type="text"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="tag1, tag2, tag3"
+                  />
+                  <p className="mt-1 text-xs text-on-surface-var">Separate tags with commas</p>
+                </div>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-btn bg-gradient-to-r from-primary to-primary-dim px-4 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)] disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+
+            {/* Scheduled Publishing */}
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-1 text-base font-semibold text-on-surface">Scheduled Publishing</h2>
+              <p className="mb-4 text-xs text-on-surface-var">Video will go live at this time. Leave blank to publish immediately.</p>
+              <input
+                type="datetime-local"
+                value={publishedAt}
+                onChange={(e) => setPublishedAt(e.target.value)}
+                className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+
+            {/* Geo-restriction */}
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-1 text-base font-semibold text-on-surface">Geo-restriction</h2>
+              <p className="mb-4 text-xs text-on-surface-var">Restrict playback by viewer country (ISO 3166-1 alpha-2 codes, e.g. US, GB, DE).</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Mode</label>
+                  <select
+                    value={geoMode}
+                    onChange={(e) => setGeoMode(e.target.value as "off" | "allowlist" | "blocklist")}
+                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="off">Off (no restriction)</option>
+                    <option value="allowlist">Allowlist (only these countries)</option>
+                    <option value="blocklist">Blocklist (block these countries)</option>
+                  </select>
+                </div>
+                {geoMode !== "off" && (
+                  <div>
+                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Country Codes</label>
+                    <input
+                      type="text"
+                      value={geoCountries}
+                      onChange={(e) => setGeoCountries(e.target.value)}
+                      placeholder="US, GB, DE"
+                      className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm font-mono text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Allowed Domains (hotlink) */}
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-1 text-base font-semibold text-on-surface">Allowed Domains</h2>
+              <p className="mb-4 text-xs text-on-surface-var">Restrict embeds to specific domains. Leave blank to allow all.</p>
+              <input
+                type="text"
+                value={allowedDomains}
+                onChange={(e) => setAllowedDomains(e.target.value)}
+                placeholder="example.com, docs.example.com"
+                className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 text-sm text-on-surface placeholder-on-surface-var/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+
+            {/* Encryption */}
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-1 text-base font-semibold text-on-surface">Encryption</h2>
+              <p className="mb-4 text-xs text-on-surface-var">Rotate the AES key used for HLS segment encryption. Clients currently playing may need to reload.</p>
+              <button
+                onClick={handleRotateKey}
+                disabled={rotatingKey}
+                className="inline-flex items-center gap-1.5 rounded-btn bg-surface-low px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-high disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">key</span>
+                {rotatingKey ? "Rotating..." : "Rotate Encryption Key"}
+              </button>
+            </div>
+
+            {/* Save Settings */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="rounded-btn bg-gradient-to-r from-primary to-primary-dim px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] transition-all hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)] disabled:opacity-50"
+              >
+                {savingSettings ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "embed" && (
+          <div className="space-y-6 max-w-3xl">
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-1 text-base font-semibold text-on-surface">Embed Code</h2>
+              <p className="mb-4 text-xs text-on-surface-var">Copy and paste this snippet into any HTML page.</p>
+              <pre className="overflow-x-auto rounded-btn bg-surface-low p-4 font-mono text-[12px] leading-relaxed text-on-surface">
+                {embedCode}
+              </pre>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  onClick={copyEmbed}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-btn bg-gradient-to-r from-primary to-primary-dim px-3 py-2.5 text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)]"
+                >
+                  <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                  {copied ? "Copied!" : "Copy iFrame"}
+                </button>
+                <button
+                  onClick={() => {
+                    const link = `${window.location.origin}/embed/${videoId}`;
+                    navigator.clipboard.writeText(link).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    });
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-btn bg-surface-low px-3 py-2.5 text-[13px] font-semibold text-primary hover:bg-surface-high"
+                >
+                  <span className="material-symbols-outlined text-[16px]">link</span>
+                  Copy Direct Link
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-card bg-surface-card p-6 shadow-card">
+              <h2 className="mb-1 text-base font-semibold text-on-surface">Direct URLs</h2>
+              <p className="mb-4 text-xs text-on-surface-var">Share these URLs directly or integrate with your own player.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Player URL</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/embed/${videoId}`}
+                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 font-mono text-[12px] text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-on-surface-var">Thumbnail URL</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={video.thumbnail_url || ""}
+                    className="w-full rounded-input border-0 bg-surface-low px-4 py-2.5 font-mono text-[12px] text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
