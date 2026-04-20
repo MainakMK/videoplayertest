@@ -40,8 +40,27 @@ function timeAgo(iso: string | null): string {
 
 function roleBadgeStyle(role: string): React.CSSProperties {
   if (role === "owner") return { background: "rgba(91,90,139,0.12)", color: "rgb(var(--primary-rgb))" };
-  if (role === "admin") return { background: "rgba(33,150,243,0.12)", color: "#1565c0" };
-  return { background: "rgba(158,158,158,0.15)", color: "#596064" };
+  if (role === "admin") return { background: "rgba(16,185,129,0.14)", color: "#047857" };
+  return { background: "rgba(59,130,246,0.12)", color: "#1d4ed8" };
+}
+
+function avatarColor(role: string): { bg: string; fg: string } {
+  if (role === "owner") return { bg: "#ede9fe", fg: "#6d28d9" };
+  if (role === "admin") return { bg: "#d1fae5", fg: "#065f46" };
+  return { bg: "#dbeafe", fg: "#1e40af" };
+}
+
+function initials(name: string | null, email: string): string {
+  const source = (name || email || "?").trim();
+  if (!source) return "?";
+  const parts = source.split(/[\s@._-]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
+function absoluteTime(iso: string | null): string {
+  if (!iso) return "Never";
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
 export default function TeamPanel() {
@@ -50,6 +69,7 @@ export default function TeamPanel() {
   const [myRole, setMyRole] = useState<"owner" | "admin" | "editor">("editor");
   const [myId, setMyId] = useState<number>(0);
 
+  const [teamQuery, setTeamQuery] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [resetMember, setResetMember] = useState<Member | null>(null);
@@ -106,7 +126,7 @@ export default function TeamPanel() {
         </div>
       )}
 
-      {/* Header row */}
+      {/* Header row — title/count on the left, search + invite on the right */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-[15px] font-bold text-on-surface">Team Members</h3>
@@ -115,15 +135,27 @@ export default function TeamPanel() {
             {!canInvite && " · Read-only (your role can't manage team)"}
           </p>
         </div>
-        {canInvite && (
-          <button
-            onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-[10px] bg-gradient-to-r from-primary to-primary-dim px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)]"
-          >
-            <span className="material-symbols-outlined text-[15px]">person_add</span>
-            Invite Member
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <span className="material-symbols-outlined pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-var/55 text-[15px]">search</span>
+            <input
+              type="text"
+              value={teamQuery}
+              onChange={(e) => setTeamQuery(e.target.value)}
+              placeholder="Search members…"
+              className="w-52 rounded-[10px] border border-on-surface/10 bg-white py-2 pl-8 pr-3 text-[12.5px] text-on-surface placeholder-on-surface-var/55 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30"
+            />
+          </div>
+          {canInvite && (
+            <button
+              onClick={() => setInviteOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-[10px] bg-gradient-to-r from-primary to-primary-dim px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(91,90,139,0.3)] hover:shadow-[0_4px_12px_rgba(91,90,139,0.4)]"
+            >
+              <span className="material-symbols-outlined text-[15px]">person_add</span>
+              Invite Member
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -132,13 +164,20 @@ export default function TeamPanel() {
         </div>
       ) : members.length === 0 ? (
         <div className="rounded-[10px] bg-[#f9fafb] py-10 text-center text-[13px] text-on-surface-var">No team members yet.</div>
-      ) : (
+      ) : (() => {
+        const q = teamQuery.trim().toLowerCase();
+        const visibleMembers = q
+          ? members.filter((m) => (m.display_name || "").toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.role.includes(q))
+          : members;
+        if (visibleMembers.length === 0) {
+          return <div className="rounded-[10px] bg-[#f9fafb] py-10 text-center text-[13px] text-on-surface-var">No members match “{teamQuery}”.</div>;
+        }
+        return (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr>
-                <th className="pb-2 pr-3 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Name</th>
-                <th className="pb-2 pr-3 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Email</th>
+                <th className="pb-2 pr-3 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Member</th>
                 <th className="pb-2 pr-3 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Role</th>
                 <th className="pb-2 pr-3 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Status</th>
                 <th className="pb-2 pr-3 text-[9.5px] font-bold uppercase tracking-[.08em] text-on-surface-var">Last Login</th>
@@ -146,13 +185,28 @@ export default function TeamPanel() {
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
+              {visibleMembers.map((m) => {
+                const av = avatarColor(m.role);
+                return (
                 <tr key={m.id} className="border-t" style={{ borderColor: "rgb(var(--surface-low-rgb))" }}>
-                  <td className="py-3 pr-3 text-[13px] font-semibold text-on-surface">
-                    {m.display_name || "—"}
-                    {m.id === myId && <span className="ml-2 text-[10px] font-bold uppercase tracking-[.05em] text-on-surface-var">(you)</span>}
+                  <td className="py-3 pr-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold tabular-nums"
+                        style={{ backgroundColor: av.bg, color: av.fg }}
+                        aria-hidden
+                      >
+                        {initials(m.display_name, m.email)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-[13px] font-semibold text-on-surface">{m.display_name || m.email.split("@")[0]}</span>
+                          {m.id === myId && <span className="text-[9.5px] font-bold uppercase tracking-[.05em] text-on-surface-var">(you)</span>}
+                        </div>
+                        <div className="truncate font-mono text-[11.5px] text-on-surface-var">{m.email}</div>
+                      </div>
+                    </div>
                   </td>
-                  <td className="py-3 pr-3 font-mono text-[12.5px] text-on-surface">{m.email}</td>
                   <td className="py-3 pr-3">
                     <span
                       className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.05em]"
@@ -167,7 +221,7 @@ export default function TeamPanel() {
                       <span style={{ color: m.is_active ? "#2e7d32" : "#596064" }}>{m.is_active ? "Active" : "Disabled"}</span>
                     </span>
                   </td>
-                  <td className="py-3 pr-3 text-[12px] text-on-surface-var">{timeAgo(m.last_login_at)}</td>
+                  <td className="py-3 pr-3 text-[12px] text-on-surface-var" title={absoluteTime(m.last_login_at)}>{timeAgo(m.last_login_at)}</td>
                   <td className="py-3 text-right">
                     <div className="inline-flex gap-1.5">
                       {canEditMember(m) && (
@@ -182,11 +236,13 @@ export default function TeamPanel() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
-      )}
+        );
+      })()}
 
       {inviteOpen && (
         <InviteModal
