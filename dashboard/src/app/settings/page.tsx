@@ -1534,18 +1534,60 @@ export default function SettingsPage() {
   }
 
   function renderAccount() {
+    // Derive initials from username (fallback to email local-part)
+    const accountSource = (username || email.split("@")[0] || "?").trim();
+    const acctParts = accountSource.split(/[\s@._-]+/).filter(Boolean);
+    const acctInitials = acctParts.length >= 2
+      ? (acctParts[0][0] + acctParts[1][0]).toUpperCase()
+      : accountSource.slice(0, 2).toUpperCase();
+
+    // Password requirement checklist + strength heuristic (lightweight — not zxcvbn)
+    const pw = newPassword;
+    const reqs = [
+      { key: "len",    ok: pw.length >= 10,               label: "At least 10 characters" },
+      { key: "upper",  ok: /[A-Z]/.test(pw),              label: "One uppercase letter" },
+      { key: "lower",  ok: /[a-z]/.test(pw),              label: "One lowercase letter" },
+      { key: "digit",  ok: /\d/.test(pw),                 label: "One number" },
+      { key: "symbol", ok: /[^A-Za-z0-9]/.test(pw),       label: "One symbol (!@#$…)" },
+    ];
+    const passCount = reqs.filter((r) => r.ok).length;
+    const strengthPct = pw ? Math.min(100, Math.round((passCount / reqs.length) * 100)) : 0;
+    const strengthMeta =
+      !pw              ? { label: "—",        bar: "#e5e7eb", fg: "#9ca3af" } :
+      passCount <= 2   ? { label: "Weak",     bar: "#ef4444", fg: "#b91c1c" } :
+      passCount === 3  ? { label: "Fair",     bar: "#f59e0b", fg: "#b45309" } :
+      passCount === 4  ? { label: "Good",     bar: "#3b82f6", fg: "#1d4ed8" } :
+                         { label: "Strong",   bar: "#10b981", fg: "#047857" };
+
+    const pwMismatch = !!(newPassword && confirmPassword && newPassword !== confirmPassword);
+
     return (
       <div className="space-y-6">
-        {/* Account Settings */}
-        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-          <h3 className="mb-6 text-[15px] font-bold text-[#1e1e2f]">Account Settings</h3>
-          <div className="flex flex-col gap-5">
-            <TextField label="Email" value={email} readOnly />
-            <TextField label="Username" value={username} readOnly />
+        {/* Identity card — avatar + email + username */}
+        <div className="rounded-[16px] bg-white p-5 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <h3 className="mb-5 text-[15px] font-bold text-[#1e1e2f]">Account Identity</h3>
+          <div className="flex flex-col sm:flex-row gap-5">
+            <div className="flex items-center gap-4 sm:min-w-[200px]">
+              <div
+                className="flex h-[60px] w-[60px] items-center justify-center rounded-full text-[18px] font-extrabold"
+                style={{ backgroundColor: "#ede9fe", color: "#6d28d9" }}
+                aria-hidden
+              >
+                {acctInitials}
+              </div>
+              <div>
+                <div className="text-[14px] font-bold text-on-surface">{username || "—"}</div>
+                <div className="text-[11.5px] text-on-surface-var">Owner</div>
+              </div>
+            </div>
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <TextField label="Email" value={email} readOnly />
+              <TextField label="Username" value={username} readOnly />
+            </div>
           </div>
         </div>
 
-        {/* Two-factor authentication (per-admin, so it lives under the admin's Account) */}
+        {/* Two-factor authentication */}
         <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="mb-4">
             <h3 className="text-[15px] font-bold text-[#1e1e2f]">Two-Factor Authentication</h3>
@@ -1554,17 +1596,52 @@ export default function SettingsPage() {
           <TwoFactorCard onToast={(msg, tone) => toast(msg, tone ?? "success")} />
         </div>
 
-        {/* Change Password */}
+        {/* Change Password — with live strength meter + requirements */}
         <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <h3 className="mb-6 text-[15px] font-bold text-[#1e1e2f]">Change Password</h3>
-          <div className="flex flex-col gap-5">
-            <PasswordField label="Current Password" value={currentPassword} onChange={setCurrentPassword} placeholder="Enter current password" />
-            <PasswordField label="New Password" value={newPassword} onChange={setNewPassword} placeholder="Enter new password" />
-            <PasswordField label="Confirm New Password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirm new password" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex flex-col gap-5">
+              <PasswordField label="Current Password" value={currentPassword} onChange={setCurrentPassword} placeholder="Enter current password" />
+              <PasswordField label="New Password" value={newPassword} onChange={setNewPassword} placeholder="Enter new password" />
+
+              {/* Strength bar */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Strength</span>
+                  <span className="text-[11.5px] font-bold" style={{ color: strengthMeta.fg }}>{strengthMeta.label}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
+                  <div className="h-full transition-all" style={{ width: `${strengthPct}%`, backgroundColor: strengthMeta.bar }} />
+                </div>
+              </div>
+
+              <PasswordField label="Confirm New Password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirm new password" />
+              {pwMismatch && (
+                <p className="text-[11.5px] font-semibold text-[#b91c1c]">Passwords don't match.</p>
+              )}
+            </div>
+
+            {/* Requirements checklist */}
+            <div className="rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb] p-4">
+              <div className="mb-3 text-[11px] font-extrabold uppercase tracking-[.1em] text-[#6b7280]">Password requirements</div>
+              <ul className="flex flex-col gap-1.5">
+                {reqs.map((r) => (
+                  <li key={r.key} className="flex items-center gap-2 text-[12.5px]">
+                    <span
+                      className="material-symbols-outlined text-[15px]"
+                      style={{ color: r.ok ? "#10b981" : "#9ca3af", fontVariationSettings: "'FILL' 1" }}
+                    >
+                      {r.ok ? "check_circle" : "radio_button_unchecked"}
+                    </span>
+                    <span style={{ color: r.ok ? "#047857" : "#6b7280" }}>{r.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <div className="mt-8 flex justify-end">
-            <button onClick={changePassword} disabled={accountSaving} className={btnPrimary}>
+            <button onClick={changePassword} disabled={accountSaving || pwMismatch} className={btnPrimary}>
               {accountSaving ? "Saving..." : "Save Account Settings"}
             </button>
           </div>
