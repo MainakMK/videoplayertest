@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import DashboardLayout from "@/components/DashboardLayout";
+import TeamPanel from "@/components/TeamPanel";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,7 +188,7 @@ function TextField({
 // Tabs
 // ---------------------------------------------------------------------------
 
-const TABS = ["Storage", "Player", "Encoding", "Domains", "Security", "Ads", "Account"] as const;
+const TABS = ["Storage", "Email", "Team", "Player", "Encoding", "Domains", "Security", "Ads", "Account"] as const;
 type Tab = (typeof TABS)[number];
 
 interface EncodingConfig {
@@ -263,9 +265,33 @@ interface WorkerStatus {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const initialTab = (() => {
+    const raw = searchParams?.get("tab");
+    if (raw && (TABS as readonly string[]).includes(raw)) return raw as Tab;
+    return "Storage" as Tab;
+  })();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("Storage");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Email (SMTP)
+  const [emailLoaded, setEmailLoaded] = useState(false);
+  const [emailCfg, setEmailCfg] = useState({
+    smtp_provider: "custom",
+    smtp_host: "",
+    smtp_port: "587",
+    smtp_user: "",
+    smtp_pass: "",
+    smtp_from: "",
+    smtp_from_name: "The Archive",
+    smtp_secure: "false",
+    configured: false,
+  });
+  const [emailDirty, setEmailDirty] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailTestTo, setEmailTestTo] = useState("");
+  const [emailTesting, setEmailTesting] = useState(false);
 
   // Storage
   const [localPath, setLocalPath] = useState("");
@@ -469,6 +495,16 @@ export default function SettingsPage() {
         const adminRes = await api.get<{ admin: { id: number; email: string } }>("/auth/me");
         setEmail(adminRes.admin?.email ?? "");
         setUsername(adminRes.admin?.email ?? "");
+
+        // Load SMTP (best-effort — non-owners may get 403)
+        try {
+          const smtp = await api.get<typeof emailCfg>("/settings/email");
+          setEmailCfg(prev => ({ ...prev, ...smtp }));
+          setEmailLoaded(true);
+          if (adminRes.admin?.email) setEmailTestTo(adminRes.admin.email);
+        } catch {
+          setEmailLoaded(true);
+        }
 
       } catch {
         toast("Failed to load settings", "error");
@@ -1096,6 +1132,209 @@ export default function SettingsPage() {
             {securitySaving ? "Saving..." : "Save Security Settings"}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Email (SMTP)
+  // -----------------------------------------------------------------------
+  const PROVIDER_DEFAULTS: Record<string, { host: string; port: string; secure: string; hint: string }> = {
+    ses:       { host: "email-smtp.us-east-1.amazonaws.com", port: "587", secure: "false", hint: "Use IAM SMTP credentials from AWS SES. Ensure your domain + region are verified." },
+    gmail:     { host: "smtp.gmail.com",                     port: "587", secure: "false", hint: "Use an App Password from your Google Account (2FA must be enabled)." },
+    outlook:   { host: "smtp.office365.com",                 port: "587", secure: "false", hint: "Works with Microsoft 365 accounts. SMTP AUTH must be enabled." },
+    mailgun:   { host: "smtp.mailgun.org",                   port: "587", secure: "false", hint: "Use your Mailgun SMTP credentials from the domain sending settings." },
+    sendgrid:  { host: "smtp.sendgrid.net",                  port: "587", secure: "false", hint: "User is literally \"apikey\", password is your SG API key." },
+    postmark:  { host: "smtp.postmarkapp.com",               port: "587", secure: "false", hint: "Use your Server API token as both username and password." },
+    custom:    { host: "",                                   port: "587", secure: "false", hint: "Any SMTP server. Fill in the host/port/user/pass yourself." },
+  };
+
+  const updateEmail = (patch: Partial<typeof emailCfg>) => {
+    setEmailCfg(prev => ({ ...prev, ...patch }));
+    setEmailDirty(true);
+  };
+
+  const onProviderChange = (provider: string) => {
+    const d = PROVIDER_DEFAULTS[provider] ?? PROVIDER_DEFAULTS.custom;
+    setEmailCfg(prev => ({
+      ...prev,
+      smtp_provider: provider,
+      smtp_host: provider === "custom" ? prev.smtp_host : d.host,
+      smtp_port: d.port,
+      smtp_secure: d.secure,
+    }));
+    setEmailDirty(true);
+  };
+
+  const saveEmail = async () => {
+    setEmailSaving(true);
+    try {
+      const body = {
+        ...emailCfg,
+        smtp_secure: emailCfg.smtp_secure === "true" || emailCfg.smtp_secure === true as unknown as string,
+        smtp_port: Number(emailCfg.smtp_port) || 587,
+      };
+      // Don't re-send masked password
+      if (body.smtp_pass === "••••••••") delete (body as Record<string, unknown>).smtp_pass;
+      const r = await api.put<{ configured?: boolean }>("/settings/email", body);
+      setEmailCfg(prev => ({ ...prev, configured: !!r.configured }));
+      setEmailDirty(false);
+      toast("Email settings saved", "success");
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast(err.message ?? "Failed to save email settings", "error");
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const testEmail = async () => {
+    const to = (emailTestTo || email).trim();
+    if (!to.includes("@")) { toast("Enter a valid email address", "error"); return; }
+    setEmailTesting(true);
+    try {
+      await api.post("/settings/email/test", { to });
+      toast(`Test email sent to ${to}`, "success");
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast(err.message ?? "Test email failed — check your SMTP credentials", "error");
+    } finally {
+      setEmailTesting(false);
+    }
+  };
+
+  function renderEmail() {
+    const cfg = emailCfg;
+    const d = PROVIDER_DEFAULTS[cfg.smtp_provider] ?? PROVIDER_DEFAULTS.custom;
+    return (
+      <div className="space-y-6">
+        {/* Status banner */}
+        <div
+          className="flex items-start gap-3 rounded-[12px] px-4 py-3"
+          style={cfg.configured
+            ? { background: "rgba(46,125,50,0.08)", border: "1px solid rgba(46,125,50,0.2)" }
+            : { background: "rgba(232,168,23,0.08)", border: "1px solid rgba(232,168,23,0.25)" }}
+        >
+          <span className="material-symbols-outlined text-[20px]" style={{ color: cfg.configured ? "#2e7d32" : "#b7791f" }}>
+            {cfg.configured ? "check_circle" : "warning"}
+          </span>
+          <div className="flex-1">
+            <div className="text-[13px] font-semibold" style={{ color: cfg.configured ? "#1b5e20" : "#92580d" }}>
+              {cfg.configured ? "SMTP configured" : "SMTP not configured"}
+            </div>
+            <p className="text-[11.5px] mt-0.5" style={{ color: "rgb(var(--on-surface-var-rgb))" }}>
+              {cfg.configured
+                ? "Welcome emails, password resets, and test emails will use this configuration."
+                : "Enter SMTP credentials below so the app can send welcome emails, password resets, and notifications."}
+            </p>
+          </div>
+        </div>
+
+        {/* Provider card */}
+        <div className={sectionCard}>
+          <h3 className="mb-1 text-[15px] font-bold text-on-surface">Email Provider</h3>
+          <p className="mb-5 text-[12px] text-on-surface-var">Pick a preset to auto-fill the host and port — or choose Custom for any SMTP server.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            {(["ses","gmail","outlook","mailgun","sendgrid","postmark","custom"] as const).map(p => {
+              const active = cfg.smtp_provider === p;
+              const labels: Record<string, string> = {
+                ses: "AWS SES",
+                gmail: "Gmail",
+                outlook: "Outlook",
+                mailgun: "Mailgun",
+                sendgrid: "SendGrid",
+                postmark: "Postmark",
+                custom: "Custom",
+              };
+              return (
+                <button
+                  key={p}
+                  onClick={() => onProviderChange(p)}
+                  className="rounded-[10px] px-3 py-2 text-[12.5px] font-semibold border-2 transition-all"
+                  style={{
+                    borderColor: active ? "#5b5a8b" : "rgb(var(--surface-high-rgb))",
+                    background: active ? "rgba(91,90,139,.06)" : "rgb(var(--surface-card-rgb))",
+                    color: active ? "#5b5a8b" : "rgb(var(--on-surface-rgb))",
+                  }}
+                >
+                  {labels[p]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11.5px] leading-relaxed" style={{ color: "rgb(var(--on-surface-var-rgb))" }}>
+            <span className="material-symbols-outlined text-[13px] align-text-bottom mr-1" style={{ color: "#5b5a8b" }}>info</span>
+            {d.hint}
+          </p>
+        </div>
+
+        {/* Credentials card */}
+        <div className={sectionCard}>
+          <h3 className="mb-5 text-[15px] font-bold text-on-surface">SMTP Credentials</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <TextField label="Host" value={cfg.smtp_host} onChange={(v) => updateEmail({ smtp_host: v })} placeholder="smtp.example.com" />
+            <TextField label="Port" value={cfg.smtp_port} onChange={(v) => updateEmail({ smtp_port: v.replace(/\D/g, "") })} placeholder="587" />
+            <TextField label="Username" value={cfg.smtp_user} onChange={(v) => updateEmail({ smtp_user: v })} placeholder="user@example.com" />
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Password</span>
+              <input
+                type="password"
+                value={cfg.smtp_pass}
+                onChange={(e) => updateEmail({ smtp_pass: e.target.value })}
+                placeholder={cfg.configured ? "••••••••" : "Enter SMTP password / API key"}
+                className="w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-[13px] text-[#1e1e2f] placeholder-[#9ca3af] focus:ring-2 focus:ring-primary/15 focus:border-primary/30 focus:outline-none transition"
+              />
+            </label>
+            <TextField label='From Address' value={cfg.smtp_from} onChange={(v) => updateEmail({ smtp_from: v })} placeholder="noreply@yourdomain.com" />
+            <TextField label='From Name' value={cfg.smtp_from_name} onChange={(v) => updateEmail({ smtp_from_name: v })} placeholder="The Archive" />
+          </div>
+          <label className="mt-4 flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={cfg.smtp_secure === "true" || (cfg.smtp_secure as unknown as boolean) === true}
+              onChange={(e) => updateEmail({ smtp_secure: e.target.checked ? "true" : "false" })}
+              className="h-4 w-4 accent-primary"
+            />
+            <span className="text-[12.5px] text-on-surface">Use TLS/SSL (usually on port 465). Most modern providers on port 587 use STARTTLS and leave this off.</span>
+          </label>
+          <div className="mt-6 flex justify-end gap-2 flex-wrap">
+            <button onClick={saveEmail} disabled={emailSaving || !emailDirty} className={btnPrimary}>
+              {emailSaving ? "Saving…" : "Save Email Settings"}
+            </button>
+          </div>
+        </div>
+
+        {/* Test email card */}
+        <div className={sectionCard}>
+          <h3 className="mb-1 text-[15px] font-bold text-on-surface">Send Test Email</h3>
+          <p className="mb-4 text-[12px] text-on-surface-var">Send a test message to verify credentials work end-to-end.</p>
+          <div className="flex gap-2 flex-wrap items-end">
+            <div className="flex-1 min-w-[240px]">
+              <TextField
+                label="Recipient"
+                value={emailTestTo}
+                onChange={(v) => setEmailTestTo(v)}
+                placeholder="you@example.com"
+              />
+            </div>
+            <button
+              onClick={testEmail}
+              disabled={emailTesting}
+              className="inline-flex items-center gap-1.5 rounded-btn border border-on-surface/15 bg-surface-card px-4 py-3 text-[13px] font-semibold text-on-surface hover:bg-surface-low disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[16px] font-normal">send</span>
+              {emailTesting ? "Sending…" : "Send Test"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderTeam() {
+    return (
+      <div className={sectionCard}>
+        <TeamPanel />
       </div>
     );
   }
@@ -1985,6 +2224,8 @@ export default function SettingsPage() {
 
           {/* Tab content */}
           {activeTab === "Storage" && renderStorage()}
+          {activeTab === "Email" && renderEmail()}
+          {activeTab === "Team" && renderTeam()}
           {activeTab === "Player" && renderPlayer()}
           {activeTab === "Encoding" && renderEncoding()}
           {activeTab === "Domains" && renderDomains()}

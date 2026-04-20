@@ -50,6 +50,7 @@ interface VideoResponse {
   thumbnail_url?: string | null;
   thumbnail_candidates?: Array<{ index: number; url: string }>;
   custom_thumbnail_set?: boolean;
+  hls_ready?: boolean;
 }
 
 interface ThumbnailCandidate { index: number; url: string; }
