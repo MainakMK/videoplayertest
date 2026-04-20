@@ -1187,71 +1187,133 @@ export default function SettingsPage() {
   }
 
   function renderSecurity() {
-    const securityItems = [
-      { label: "Signed URLs", desc: "Require JWT tokens to access video files. Tokens are generated when the player loads and expire after 8 hours.", enabled: signedUrlsEnabled, toggle: () => setSignedUrlsEnabled(!signedUrlsEnabled) },
-      { label: "Hotlink Protection", desc: "Block video requests from unauthorized domains by checking the Referer header.", enabled: hotlinkProtectionEnabled, toggle: () => setHotlinkProtectionEnabled(!hotlinkProtectionEnabled) },
-      { label: "IP Blocking", desc: "Block specific IP addresses from accessing any part of your platform.", enabled: ipBlockingEnabled, toggle: () => setIpBlockingEnabled(!ipBlockingEnabled) },
+    // Risk-weighted security items. Weights sum to 100 so the score fits neatly.
+    type Risk = "high" | "medium" | "low";
+    const securityItems: { key: Risk; label: string; desc: string; enabled: boolean; toggle: () => void; weight: number; risk: Risk; recommended: boolean }[] = [
+      { key: "high",   label: "Signed URLs",        desc: "Require JWT tokens to access video files. Tokens are generated when the player loads and expire after 8 hours.", enabled: signedUrlsEnabled,         toggle: () => setSignedUrlsEnabled(!signedUrlsEnabled),           weight: 40, risk: "high",   recommended: true  },
+      { key: "medium", label: "Hotlink Protection", desc: "Block video requests from unauthorized domains by checking the Referer header.",                                 enabled: hotlinkProtectionEnabled,   toggle: () => setHotlinkProtectionEnabled(!hotlinkProtectionEnabled), weight: 20, risk: "medium", recommended: true  },
+      { key: "low",    label: "IP Blocking",        desc: "Block specific IP addresses from accessing any part of your platform.",                                           enabled: ipBlockingEnabled,          toggle: () => setIpBlockingEnabled(!ipBlockingEnabled),             weight: 10, risk: "low",    recommended: false },
     ];
+    const rateLimitWeight = 30;
 
+    const score =
+      securityItems.reduce((s, it) => s + (it.enabled ? it.weight : 0), 0) +
+      (rateLimitEnabled ? rateLimitWeight : 0);
+    const scoreMeta =
+      score >= 80 ? { label: "Strong",   bar: "#10b981", bg: "#ecfdf5", fg: "#047857" } :
+      score >= 50 ? { label: "Moderate", bar: "#f59e0b", bg: "#fffbeb", fg: "#b45309" } :
+                    { label: "Weak",     bar: "#ef4444", bg: "#fef2f2", fg: "#b91c1c" };
+
+    const riskMeta: Record<Risk, { bg: string; fg: string; label: string }> = {
+      high:   { bg: "#fef2f2", fg: "#b91c1c", label: "High impact" },
+      medium: { bg: "#fffbeb", fg: "#b45309", label: "Medium impact" },
+      low:    { bg: "#eff6ff", fg: "#1d4ed8", label: "Low impact" },
+    };
+
+    // Human-readable captions for rate-limit fields. Backend fields are per minute
+    // (except Auth which is req/window), so caption reframes into per-second so the
+    // admin can see what the dial actually lets through.
     const rateLimitFields = [
-      { label: "API (req/min)", value: rateLimitApi, set: setRateLimitApi },
-      { label: "Auth (req/window)", value: rateLimitAuth, set: setRateLimitAuth },
-      { label: "Auth Window (minutes)", value: rateLimitAuthWindow, set: setRateLimitAuthWindow },
-      { label: "Player (req/min)", value: rateLimitPlayer, set: setRateLimitPlayer },
-      { label: "CDN/HLS (req/min)", value: rateLimitCdn, set: setRateLimitCdn },
-      { label: "Upload (req/min)", value: rateLimitUpload, set: setRateLimitUpload },
+      { label: "API (req/min)",          value: rateLimitApi,        set: setRateLimitApi,        caption: (n: number) => `≈${(n / 60).toFixed(1)} requests per second` },
+      { label: "Auth (req/window)",      value: rateLimitAuth,       set: setRateLimitAuth,       caption: (n: number) => `${n} login attempts per window` },
+      { label: "Auth Window (minutes)",  value: rateLimitAuthWindow, set: setRateLimitAuthWindow, caption: (n: number) => `Window length: ${n} min` },
+      { label: "Player (req/min)",       value: rateLimitPlayer,     set: setRateLimitPlayer,     caption: (n: number) => `≈${(n / 60).toFixed(1)} plays per second per IP` },
+      { label: "CDN/HLS (req/min)",      value: rateLimitCdn,        set: setRateLimitCdn,        caption: (n: number) => `≈${(n / 60).toFixed(1)} segment fetches per second per IP` },
+      { label: "Upload (req/min)",       value: rateLimitUpload,     set: setRateLimitUpload,     caption: (n: number) => `≈${(n / 60).toFixed(1)} uploads per second per IP` },
     ];
 
     return (
-      <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-        <h3 className="mb-2 text-[15px] font-bold text-[#1e1e2f]">Security Settings</h3>
-
-        <div className="flex flex-col">
-          {securityItems.map((item) => (
-            <div key={item.label} className="flex items-center justify-between py-5 border-b border-[#f0f0f5]">
-              <div className="pr-8">
-                <span className="text-[14px] font-semibold text-[#1e1e2f]">{item.label}</span>
-                <p className="mt-1 text-[13px] text-[#9ca3af]">{item.desc}</p>
+      <>
+        {/* Security score card */}
+        <div className="rounded-[16px] bg-white p-5 sm:p-6 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]" style={{ color: scoreMeta.bar, fontVariationSettings: "'FILL' 1" }}>shield</span>
+                <h3 className="text-[14px] font-bold text-on-surface">Security Score</h3>
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[.08em]" style={{ backgroundColor: scoreMeta.bg, color: scoreMeta.fg }}>
+                  {scoreMeta.label}
+                </span>
               </div>
-              <Toggle enabled={item.enabled} onChange={item.toggle} />
+              <p className="mt-1 text-[11.5px] text-on-surface-var">Turn on more protections to increase your score. Signed URLs and rate limiting are the highest-leverage controls.</p>
             </div>
-          ))}
-
-          {/* Rate Limiting */}
-          <div className="py-5">
-            <div className="flex items-center justify-between">
-              <div className="pr-8">
-                <span className="text-[14px] font-semibold text-[#1e1e2f]">Rate Limiting</span>
-                <p className="mt-1 text-[13px] text-[#9ca3af]">Limit requests per IP to protect against abuse. Disable to allow unlimited requests.</p>
-              </div>
-              <Toggle enabled={rateLimitEnabled} onChange={() => setRateLimitEnabled(!rateLimitEnabled)} />
+            <div className="flex items-baseline gap-1">
+              <span className="text-[40px] font-extrabold leading-none tabular-nums text-on-surface tracking-[-1px]">{score}</span>
+              <span className="text-[13px] font-semibold text-on-surface-var">/ 100</span>
             </div>
-
-            {rateLimitEnabled && (
-              <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5">
-                {rateLimitFields.map((f) => (
-                  <label key={f.label} className="block">
-                    <span className="mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{f.label}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={f.value}
-                      onChange={(e) => f.set(Number(e.target.value) || 1)}
-                      className="w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-[13px] text-[#1e1e2f] focus:ring-2 focus:ring-primary/15 focus:outline-none"
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
+          </div>
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
+            <div className="h-full transition-all" style={{ width: `${score}%`, backgroundColor: scoreMeta.bar }} />
           </div>
         </div>
 
-        <div className="mt-8 flex justify-end">
-          <button onClick={saveSecurity} disabled={securitySaving} className={btnPrimary}>
-            {securitySaving ? "Saving..." : "Save Security Settings"}
-          </button>
+        {/* Toggles with risk badges */}
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-5">
+          <h3 className="mb-3 text-[15px] font-bold text-[#1e1e2f]">Protections</h3>
+          <div className="flex flex-col">
+            {securityItems.map((item, i) => {
+              const rm = riskMeta[item.risk];
+              return (
+                <div key={item.label} className={`flex items-start justify-between gap-6 py-4 ${i < securityItems.length - 1 ? "border-b border-[#f0f0f5]" : ""}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13.5px] font-semibold text-[#1e1e2f]">{item.label}</span>
+                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.08em]" style={{ backgroundColor: rm.bg, color: rm.fg }}>
+                        {rm.label}
+                      </span>
+                      {item.recommended && (
+                        <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.08em]">
+                          Recommended
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[12.5px] text-[#6b7280] leading-relaxed">{item.desc}</p>
+                  </div>
+                  <Toggle enabled={item.enabled} onChange={item.toggle} />
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+
+        {/* Rate limiting card */}
+        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <div className="flex items-start justify-between gap-6 pb-4 border-b border-[#f0f0f5]">
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[13.5px] font-semibold text-[#1e1e2f]">Rate Limiting</span>
+                <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.08em]">Recommended</span>
+              </div>
+              <p className="mt-1 text-[12.5px] text-[#6b7280]">Limit requests per IP to protect against abuse. Disable to allow unlimited requests.</p>
+            </div>
+            <Toggle enabled={rateLimitEnabled} onChange={() => setRateLimitEnabled(!rateLimitEnabled)} />
+          </div>
+
+          {rateLimitEnabled && (
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+              {rateLimitFields.map((f) => (
+                <label key={f.label} className="block">
+                  <span className="mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{f.label}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={f.value}
+                    onChange={(e) => f.set(Number(e.target.value) || 1)}
+                    className="w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-[13px] text-[#1e1e2f] focus:ring-2 focus:ring-primary/15 focus:outline-none"
+                  />
+                  <p className="mt-1.5 text-[11px] text-[#9ca3af]">{f.caption(f.value)}</p>
+                </label>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-8 flex justify-end">
+            <button onClick={saveSecurity} disabled={securitySaving} className={btnPrimary}>
+              {securitySaving ? "Saving..." : "Save Security Settings"}
+            </button>
+          </div>
+        </div>
+      </>
     );
   }
 
