@@ -987,14 +987,76 @@ export default function SettingsPage() {
       setShowCdnAddForm(false);
     };
 
+    // Classify a domain value into a status we can badge.
+    // This is a content-level heuristic, not a DNS check — a real check would need
+    // a backend endpoint to probe the URL.
+    const classifyDomain = (v: string): { label: string; tone: "ok" | "warn" | "unset" } => {
+      const t = (v || "").trim().toLowerCase();
+      if (!t) return { label: "Not set", tone: "unset" };
+      if (t === "localhost" || t.startsWith("127.") || !t.includes(".")) return { label: "Local only", tone: "warn" };
+      if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(t)) return { label: "Configured", tone: "ok" };
+      return { label: "Invalid", tone: "warn" };
+    };
+    const toneStyles: Record<"ok" | "warn" | "unset", { bg: string; fg: string; dot: string }> = {
+      ok:    { bg: "#ecfdf5", fg: "#047857", dot: "#10b981" },
+      warn:  { bg: "#fffbeb", fg: "#b45309", dot: "#f59e0b" },
+      unset: { bg: "#f3f4f6", fg: "#6b7280", dot: "#9ca3af" },
+    };
+    const dashChip = classifyDomain(dashboardDomain);
+    const playChip = classifyDomain(playerDomain);
+    const activeCdn = cdnDomains.filter(d => d.is_active).length;
+
+    const DomainKpi = ({ label, value, sub, tone, accent }: { label: string; value: string; sub: string; tone: "ok" | "warn" | "unset"; accent: string }) => {
+      const s = toneStyles[tone];
+      return (
+        <div className="rounded-[12px] bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px]" style={{ borderLeftColor: accent }}>
+          <div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
+          <div className="mt-1.5 text-[15px] font-bold text-[#1e1e2f] truncate">{value || "—"}</div>
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ backgroundColor: s.bg, color: s.fg }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.dot }} />
+            {sub}
+          </div>
+        </div>
+      );
+    };
+
+    const VerificationChip = ({ tone, label }: { tone: "ok" | "warn" | "unset"; label: string }) => {
+      const s = toneStyles[tone];
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold" style={{ backgroundColor: s.bg, color: s.fg }}>
+          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.dot }} />
+          {label}
+        </span>
+      );
+    };
+
     return (
       <>
+        {/* KPI strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          <DomainKpi label="Dashboard URL" value={dashboardDomain} sub={dashChip.label} tone={dashChip.tone} accent="#6366F1" />
+          <DomainKpi label="Player URL" value={playerDomain} sub={playChip.label} tone={playChip.tone} accent="#10B981" />
+          <DomainKpi label="CDN Load Balancing" value={`${activeCdn} active`} sub={activeCdn > 0 ? "Multi-CDN enabled" : "Single-origin only"} tone={activeCdn > 0 ? "ok" : "unset"} accent="#F59E0B" />
+        </div>
+
         {/* Domain Settings */}
         <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
           <h3 className="mb-6 text-[15px] font-bold text-[#1e1e2f]">Domain Settings</h3>
           <div className="flex flex-col gap-5">
-            <TextField label="Dashboard Domain" value={dashboardDomain} onChange={setDashboardDomain} placeholder="dash.example.com" />
-            <TextField label="Player Domain" value={playerDomain} onChange={setPlayerDomain} placeholder="play.example.com" />
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Dashboard Domain</span>
+                <VerificationChip tone={dashChip.tone} label={dashChip.label} />
+              </div>
+              <TextField label="" value={dashboardDomain} onChange={setDashboardDomain} placeholder="dash.example.com" />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Player Domain</span>
+                <VerificationChip tone={playChip.tone} label={playChip.label} />
+              </div>
+              <TextField label="" value={playerDomain} onChange={setPlayerDomain} placeholder="play.example.com" />
+            </div>
           </div>
           <div className="mt-6 flex justify-end">
             <button onClick={saveDomains} disabled={domainsSaving} className={btnPrimary}>
@@ -1102,18 +1164,24 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Legacy fallback */}
-        <div className="mb-6">
-          <span className="mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">
-            Legacy CDN Domain (fallback) — used only when no CDN domains are configured above
-          </span>
-          <TextField label="" value={cdnDomain} onChange={setCdnDomain} placeholder="cdn.example.com" />
-          <div className="mt-4 flex justify-end">
-            <button onClick={saveDomains} disabled={domainsSaving} className="rounded-[10px] border border-[#e5e7eb] bg-white px-5 py-2.5 text-[13px] font-semibold text-[#6b7280] hover:text-[#1e1e2f] hover:border-[#d1d5db] transition">
-              {domainsSaving ? "Saving..." : "Save Fallback"}
-            </button>
+        {/* Legacy fallback — collapsed under Advanced so it doesn't dominate */}
+        <details className="group mb-6 rounded-[16px] bg-white p-4 sm:p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[12.5px] font-semibold text-on-surface-var hover:text-on-surface">
+            <span className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[16px] transition-transform group-open:rotate-90">chevron_right</span>
+              Advanced · Legacy CDN Domain (fallback)
+            </span>
+            <span className="text-[11px] text-on-surface-var/70">Used only when no CDN domains are configured above</span>
+          </summary>
+          <div className="mt-4 pl-6">
+            <TextField label="" value={cdnDomain} onChange={setCdnDomain} placeholder="cdn.example.com" />
+            <div className="mt-4 flex justify-end">
+              <button onClick={saveDomains} disabled={domainsSaving} className="rounded-[10px] border border-[#e5e7eb] bg-white px-5 py-2.5 text-[13px] font-semibold text-[#6b7280] hover:text-[#1e1e2f] hover:border-[#d1d5db] transition">
+                {domainsSaving ? "Saving..." : "Save Fallback"}
+              </button>
+            </div>
           </div>
-        </div>
+        </details>
       </>
     );
   }
