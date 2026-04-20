@@ -1353,30 +1353,43 @@ export default function SettingsPage() {
         <div className={sectionCard}>
           <h3 className="mb-1 text-[15px] font-bold text-on-surface">Email Provider</h3>
           <p className="mb-5 text-[12px] text-on-surface-var">Pick a preset to auto-fill the host and port — or choose Custom for any SMTP server.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
             {(["ses","gmail","outlook","mailgun","sendgrid","postmark","custom"] as const).map(p => {
               const active = cfg.smtp_provider === p;
-              const labels: Record<string, string> = {
-                ses: "AWS SES",
-                gmail: "Gmail",
-                outlook: "Outlook",
-                mailgun: "Mailgun",
-                sendgrid: "SendGrid",
-                postmark: "Postmark",
-                custom: "Custom",
+              // Per-provider monogram + brand color — inline so we don't depend on an icon set
+              const brand: Record<string, { label: string; mono: string; bg: string; fg: string }> = {
+                ses:      { label: "AWS SES",  mono: "AWS", bg: "#FFF4E5", fg: "#FF9900" },
+                gmail:    { label: "Gmail",    mono: "G",   bg: "#FDECEA", fg: "#EA4335" },
+                outlook:  { label: "Outlook",  mono: "O",   bg: "#E8F1FB", fg: "#0078D4" },
+                mailgun:  { label: "Mailgun",  mono: "M",   bg: "#FEE2E2", fg: "#F06B66" },
+                sendgrid: { label: "SendGrid", mono: "SG",  bg: "#E0F2FE", fg: "#1A82E2" },
+                postmark: { label: "Postmark", mono: "P",   bg: "#FFF7E0", fg: "#FFDE00" },
+                custom:   { label: "Custom",   mono: "⚙",   bg: "#F3F4F6", fg: "#6B7280" },
               };
+              const b = brand[p];
               return (
                 <button
                   key={p}
                   onClick={() => onProviderChange(p)}
-                  className="rounded-[10px] px-3 py-2 text-[12.5px] font-semibold border-2 transition-all"
+                  className="relative flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left border-2 transition-all"
                   style={{
                     borderColor: active ? "#5b5a8b" : "rgb(var(--surface-high-rgb))",
                     background: active ? "rgba(91,90,139,.06)" : "rgb(var(--surface-card-rgb))",
-                    color: active ? "#5b5a8b" : "rgb(var(--on-surface-rgb))",
+                    boxShadow: active ? "0 0 0 3px rgba(91,90,139,0.08)" : "none",
                   }}
                 >
-                  {labels[p]}
+                  <span
+                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[6px] text-[10px] font-extrabold tabular-nums"
+                    style={{ backgroundColor: b.bg, color: b.fg }}
+                  >
+                    {b.mono}
+                  </span>
+                  <span className="text-[12.5px] font-semibold" style={{ color: active ? "#5b5a8b" : "rgb(var(--on-surface-rgb))" }}>{b.label}</span>
+                  {active && (
+                    <span className="ml-auto flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#5b5a8b] text-white" aria-label="Selected provider">
+                      <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                    </span>
+                  )}
                 </button>
               );
             })}
