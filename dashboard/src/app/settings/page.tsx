@@ -856,70 +856,101 @@ export default function SettingsPage() {
   }
 
   function renderStorage() {
-    const localFmt = formatBytes(storageUsage.local.totalSize);
-    const localParts = localFmt.split(" ");
-    const r2SizeFmt = formatBytes(storageUsage.r2.totalSize);
-    const r2Parts = r2SizeFmt.split(" ");
+    const totalBytes = storageUsage.local.totalSize + storageUsage.r2.totalSize;
+    const totalFmt = formatBytes(totalBytes).split(" ");
+    const totalVideos = storageUsage.local.count + storageUsage.r2.count;
+    const localPct = totalBytes > 0 ? Math.round((storageUsage.local.totalSize / totalBytes) * 100) : 100;
+    const r2Pct = 100 - localPct;
+    // R2 standard pricing: $0.015 per GB-month (public docs)
+    const r2GB = storageUsage.r2.totalSize / (1024 ** 3);
+    const r2CostMonth = r2GB * 0.015;
+    const r2CostDisplay = r2CostMonth < 0.01 ? "<$0.01" : `$${r2CostMonth.toFixed(2)}`;
+
+    // R2 status — inferred from whether creds are present
+    const r2HasAllCreds = !!(r2AccountId && r2AccessKeyId && r2SecretAccessKey && r2BucketName);
+    const r2HasSomeCreds = !!(r2AccountId || r2AccessKeyId || r2SecretAccessKey || r2BucketName);
+    const r2Status = r2HasAllCreds ? "configured" : r2HasSomeCreds ? "partial" : "unset";
+    const r2StatusMeta = {
+      configured: { label: "Configured", bg: "#ecfdf5", fg: "#047857", dot: "#10b981" },
+      partial:    { label: "Incomplete", bg: "#fffbeb", fg: "#b45309", dot: "#f59e0b" },
+      unset:      { label: "Not configured", bg: "#f3f4f6", fg: "#6b7280", dot: "#9ca3af" },
+    }[r2Status];
+
+    const KpiCard = ({ label, value, unit, sub, accent }: { label: string; value: string; unit?: string; sub?: string; accent: string }) => (
+      <div
+        className="rounded-[12px] bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-l-[3px]"
+        style={{ borderLeftColor: accent }}
+      >
+        <div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">{label}</div>
+        <div className="mt-2 flex items-baseline gap-1.5">
+          <span className="text-[24px] font-extrabold leading-none tracking-[-0.6px] text-[#1e1e2f] tabular-nums">{value}</span>
+          {unit && <span className="text-[12px] font-semibold text-[#9ca3af]">{unit}</span>}
+        </div>
+        {sub && <div className="mt-2 text-[12px] text-[#6b7280]">{sub}</div>}
+      </div>
+    );
 
     return (
       <>
-        {/* Storage Usage */}
-        <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-8">
-          <h3 className="mb-5 text-[15px] font-bold text-on-surface">Storage Usage</h3>
+        {/* KPI row — 4 compact cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          <KpiCard label="Total Storage" value={totalFmt[0]} unit={totalFmt[1] || "B"} sub={`across ${totalVideos} video${totalVideos === 1 ? "" : "s"}`} accent="#6366F1" />
+          <KpiCard label="Videos Stored" value={String(totalVideos)} sub={`${storageUsage.local.count} local · ${storageUsage.r2.count} R2`} accent="#10B981" />
+          <KpiCard label="Location Split" value={`${localPct}%`} unit="local" sub={`${r2Pct}% on Cloudflare R2`} accent="#F59E0B" />
+          <KpiCard label="Est. R2 Cost" value={r2CostDisplay} unit="/mo" sub="at $0.015 per GB-month" accent="#F38020" />
+        </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-7">
-            {/* Local Server */}
-            <div className="rounded-[14px] bg-[#eef1f8] px-6 py-5">
-              <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Local Server</span>
-              <div className="mt-3 flex items-baseline gap-1.5">
-                <span className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[#1e1e2f]">{localParts[0]}</span>
-                <span className="text-[13px] font-semibold text-[#9ca3af]">{localParts[1] || "B"}</span>
-              </div>
-              <div className="mt-2 text-[13px] text-[#6b7280]">{storageUsage.local.count} video{storageUsage.local.count !== 1 ? "s" : ""}</div>
-            </div>
-
-            {/* Cloudflare R2 */}
-            <div className="rounded-[14px] bg-[#fff5eb] px-6 py-5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-[18px] w-[18px] items-center justify-center rounded-[4px] bg-[#f38020]">
-                  <span className="text-[10px] text-white font-bold">R</span>
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#f38020]">Cloudflare R2</span>
-              </div>
-              <div className="mt-3 flex items-baseline gap-1.5">
-                <span className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[#1e1e2f]">{r2Parts[0]}</span>
-                <span className="text-[13px] font-semibold text-[#9ca3af]">{r2Parts[1] || "B"}</span>
-              </div>
-              <div className="mt-2 text-[13px] text-[#6b7280]">{storageUsage.r2.count} video{storageUsage.r2.count !== 1 ? "s" : ""}</div>
+        {/* Split bar — visual share of storage per backend */}
+        <div className="rounded-[16px] bg-white p-4 sm:p-6 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[13px] font-bold text-on-surface">Storage Split</h3>
+            <div className="flex items-center gap-4 text-[11px] text-[#6b7280]">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#6366F1]" />Local</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#F38020]" />R2</span>
             </div>
           </div>
-
-          {/* Local Storage Path */}
-          <div>
-            <span className="mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Local Storage Path</span>
-            <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-[13px] text-[#1e1e2f]">{localPath || "/var/www/videos"}</div>
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
+            {localPct > 0 && <div className="h-full bg-[#6366F1] transition-all" style={{ width: `${localPct}%` }} />}
+            {r2Pct > 0 && <div className="h-full bg-[#F38020] transition-all" style={{ width: `${r2Pct}%` }} />}
           </div>
+        </div>
+
+        {/* Local Storage Path */}
+        <div className="rounded-[16px] bg-white p-4 sm:p-6 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-5">
+          <span className="mb-2 block text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6b7280]">Local Storage Path</span>
+          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-[13px] text-[#1e1e2f]">{localPath || "/var/www/videos"}</div>
         </div>
 
         {/* Cloudflare R2 Configuration */}
         <div className="rounded-[16px] bg-white p-4 sm:p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-          <div className="mb-7 flex items-center gap-3">
-            <div className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] bg-[#f38020]">
-              <span className="text-[12px] text-white font-bold">R</span>
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] bg-[#f38020]">
+                <span className="text-[12px] text-white font-bold">R</span>
+              </div>
+              <h3 className="text-[15px] font-bold text-[#1e1e2f]">Cloudflare R2 Configuration</h3>
             </div>
-            <h3 className="text-[15px] font-bold text-[#1e1e2f]">Cloudflare R2 Configuration</h3>
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              style={{ backgroundColor: r2StatusMeta.bg, color: r2StatusMeta.fg }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r2StatusMeta.dot }} />
+              {r2StatusMeta.label}
+            </span>
           </div>
 
-          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <TextField label="R2 Account ID" value={r2AccountId} onChange={setR2AccountId} placeholder="Account ID" />
+            <TextField label="R2 Bucket Name" value={r2BucketName} onChange={setR2BucketName} placeholder="my-bucket" />
             <PasswordField label="R2 Access Key ID" value={r2AccessKeyId} onChange={setR2AccessKeyId} placeholder="Access Key ID" />
             <PasswordField label="R2 Secret Access Key" value={r2SecretAccessKey} onChange={setR2SecretAccessKey} placeholder="Secret Access Key" />
-            <TextField label="R2 Bucket Name" value={r2BucketName} onChange={setR2BucketName} placeholder="my-bucket" />
-            <TextField label="R2 Public URL" value={r2PublicUrl} onChange={setR2PublicUrl} placeholder="https://pub.your.dev" />
+            <div className="md:col-span-2">
+              <TextField label="R2 Public URL" value={r2PublicUrl} onChange={setR2PublicUrl} placeholder="https://pub.your.dev" />
+            </div>
           </div>
 
           <div className="mt-8 flex items-center justify-between">
-            <button onClick={testStorageConnection} disabled={storageTesting} className="rounded-[10px] border border-primary/25 bg-white px-5 py-2.5 text-[13px] font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-50">
+            <button onClick={testStorageConnection} disabled={storageTesting || !r2HasAllCreds} className="rounded-[10px] border border-primary/25 bg-white px-5 py-2.5 text-[13px] font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-50">
               {storageTesting ? "Testing..." : "Test Connection"}
             </button>
             <button onClick={saveStorage} disabled={storageSaving} className={btnPrimary}>
