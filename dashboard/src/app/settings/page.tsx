@@ -1512,7 +1512,7 @@ export default function SettingsPage() {
                     boxShadow: active ? "0 0 0 3px rgba(91,90,139,0.08)" : "none",
                   }}
                 >
-                  <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] bg-white ring-1 ring-black/5">
+                  <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center">
                     {b.logo}
                   </span>
                   <span className="text-[12.5px] font-semibold" style={{ color: active ? "#5b5a8b" : "rgb(var(--on-surface-rgb))" }}>{b.label}</span>
